@@ -1,4 +1,4 @@
-# bpmux&nbsp;&nbsp;&nbsp;[![Build Status](https://travis-ci.org/davedoesdev/bpmux.png)](https://travis-ci.org/davedoesdev/bpmux) [![Coverage Status](https://coveralls.io/repos/davedoesdev/bpmux/badge.png?branch=master)](https://coveralls.io/r/davedoesdev/bpmux?branch=master) [![NPM version](https://badge.fury.io/js/bpmux.png)](http://badge.fury.io/js/bpmux)
+# bpmux&nbsp;&nbsp;&nbsp;[![Build Status](https://travis-ci.org/davedoesdev/bpmux.png)](https://travis-ci.org/davedoesdev/bpmux) [![Coverage Status](https://coveralls.io/repos/davedoesdev/bpmux/badge.png?branch=master&service=github)](https://coveralls.io/r/davedoesdev/bpmux?branch=master) [![NPM version](https://badge.fury.io/js/bpmux.png)](http://badge.fury.io/js/bpmux)
 
 Node stream multiplexing with back-pressure on each stream.
 
