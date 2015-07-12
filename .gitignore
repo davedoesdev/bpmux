@@ -1,0 +1,6 @@
+/node_modules
+build
+cache
+test/fixtures/webpack/bundle.js
+test/fixtures/example/bundle.js
+test/fixtures/nw/primus.js

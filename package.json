@@ -1,0 +1,70 @@
+{
+  "name": "bpmux",
+  "description": "Node stream multiplexing with back-pressure on each stream",
+  "version": "0.0.1",
+  "homepage": "https://github.com/davedoesdev/bpmux",
+  "author": {
+    "name": "David Halls",
+    "email": "dave@davedoesdev.com",
+    "url": "http://www.davedoesdev.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/davedoesdev/bpmux.git"
+  },
+  "bugs": {
+    "url": "https://github.com/davedoesdev/bpmux/issues"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "scripts": {
+    "test": "grunt lint test-fast",
+    "travis-test-coverage": "grunt lint coverage coveralls",
+    "travis-test-browser": "grunt test-browser"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "keywords": [
+    "stream",
+    "back-pressure",
+    "backpressure",
+    "high-water mark",
+    "duplex",
+    "readable",
+    "writable",
+    "multiplex",
+    "mux",
+    "demux"
+  ],
+  "engines": {
+    "node": ">= 0.10"
+  },
+  "dependencies": {
+    "frame-stream": "~1.1.1"
+  },
+  "devDependencies": {
+    "chai": "~2.3.0",
+    "coveralls": "~2.11.2",
+    "grunt": "~0.4.5",
+    "grunt-apidox": "~0.1.7",
+    "grunt-cafe-mocha": "~0.1.13",
+    "grunt-cli": "~0.1.13",
+    "grunt-exec": "~0.4.6",
+    "grunt-jslint": "~1.1.14",
+    "grunt-webpack": "~1.0.8",
+    "webpack": "1.x",
+    "webpack-dev-server": "1.x",
+    "node-libs-browser": ">= 0.4.0 <=0.6.0",
+    "istanbul": "~0.3.14",
+    "primus": "~3.0.2",
+    "primus-backpressure": "~0.2.3",
+    "ws": "~0.7.2",
+    "tmp": "~0.0.26",
+    "async": "~1.0.0",
+    "grunt-node-webkit-builder": "~1.0.2",
+    "grunt-env": "~0.4.4",
+    "serve-static": "~1.10.0",
+    "finalhandler": "~0.4.0"
+  }
+}
