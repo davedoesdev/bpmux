@@ -19,7 +19,7 @@ Multiplexing multiple streams over a single TCP stream:
 var net = require('net'),
     crypto = require('crypto'),
     assert = require('assert'),
-    BPMux = require('bpmux'),
+    BPMux = require('bpmux').BPMux,
     sent = [];
 
 net.createServer(function (c)
@@ -79,7 +79,7 @@ Multiple return pipes to the browser, multiplexed over a single Primus connectio
 
 ```javascript
 var PrimusDuplex = require('primus-backpressure').PrimusDuplex,
-    BPMux = require('bpmux'),
+    BPMux = require('bpmux').BPMux,
     http = require('http'),
     path = require('path'),
     crypto = require('crypto'),
