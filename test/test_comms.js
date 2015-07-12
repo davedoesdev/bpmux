@@ -1200,9 +1200,15 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         function read()
         {
-            var data = receiver.read();
-            if (data !== null)
+            var data;
+
+            while (true)
             {
+                data = receiver.read();
+                if (data === null)
+                {
+                    break;
+                }
                 receiver_bufs.push(data);
             }
         }
