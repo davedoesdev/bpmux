@@ -62,6 +62,7 @@
     "nw-builder": "~2.2.0",
     "grunt-env": "~0.4.4",
     "serve-static": "~1.10.2",
-    "finalhandler": "~0.4.1"
+    "finalhandler": "~0.4.1",
+    "json-loader": "~0.5.4"
   }
 }

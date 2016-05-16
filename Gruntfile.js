@@ -55,9 +55,8 @@ module.exports = function (grunt)
                 command: 'cat coverage/lcov.info | coveralls'
             },
 
-            // can we use -r to run directly?
             nw_build: {
-                command: './node_modules/.bin/nwbuild -p linux64 test/fixtures/nw/**'
+                command: './node_modules/.bin/nwbuild -p linux64 -v 0.12.3 test/fixtures/nw'
             },
 
             bpmux_test: {
@@ -65,11 +64,11 @@ module.exports = function (grunt)
             },
 
             bundle: {
-                command: './node_modules/.bin/webpack test/fixtures/webpack/bundler.js test/fixtures/webpack/bundle.js'
+                command: './node_modules/.bin/webpack --module-bind json test/fixtures/webpack/bundler.js test/fixtures/webpack/bundle.js'
             },
 
             bundle_example: {
-                command: './node_modules/.bin/webpack test/fixtures/example/bundler.js test/fixtures/example/bundle.js'
+                command: './node_modules/.bin/webpack --module-bind json test/fixtures/example/bundler.js test/fixtures/example/bundle.js'
             }
         }
     });
