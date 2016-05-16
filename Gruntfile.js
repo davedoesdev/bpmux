@@ -21,7 +21,9 @@ module.exports = function (grunt)
 
         mochaTest: {
             default: {
-                src: [ 'test/test_tcp.js', 'test/test_channel_full.js' ],
+                src: [ 'test/test_tcp.js',
+                       'test/test_channel_full.js',
+                       'test/test_inline_stream.js'],
                 options: {
                     timeout: 10 * 60 * 1000,
                     bail: true,

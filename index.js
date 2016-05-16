@@ -282,26 +282,20 @@ function BPDuplex(options, mux, chan)
     this._handshake_sent = false;
     this._handshake_received = false;
 
-    function check_remove()
-    {
-        if (this._finished && this._ended && !this._removed)
-        {
-            this._mux._remove(this);
-        }
-    }
-
     this.on('finish', function ()
     {
         this._finished = true;
         this._mux._send_end(this);
-        check_remove.call(this);
+        this._check_remove();
     });
 
     this.on('end', function ()
     {
         this._ended = true;
-        check_remove.call(this);
+        this._check_remove();
     });
+
+    mux._duplexes[chan] = this;
 
     if (!options._delay_handshake)
     {
@@ -310,6 +304,14 @@ function BPDuplex(options, mux, chan)
 }
 
 util.inherits(BPDuplex, Duplex);
+
+BPDuplex.prototype._check_remove = function ()
+{
+    if (this._finished && this._ended && !this._removed)
+    {
+        this._mux._remove(this);
+    }
+};
 
 BPDuplex.prototype.get_channel = function ()
 {
@@ -389,6 +391,8 @@ function BPMux(carrier, options)
     this._parse_handshake_data = options.parse_handshake_data;
     this._coalesce_writes = options.coalesce_writes;
     this._carrier = carrier;
+    this._sending = false;
+    this._send_requested = false;
 
     this._out_stream = frame.encode(options);
 
@@ -548,7 +552,6 @@ BPMux.prototype._process_header = function (buf)
     if ((type !== TYPE_FINISHED_STATUS) && !duplex)
     {
         duplex = new BPDuplex(this._peer_multiplex_options, this, chan);
-        this._duplexes[chan] = duplex;
         this.emit('peer_multiplex', duplex);
     }
 
@@ -557,6 +560,8 @@ BPMux.prototype._process_header = function (buf)
         switch (type)
         {
             case TYPE_END:
+                duplex._ended = true;
+                duplex._check_remove();
                 duplex.push(null);
                 break;
 
@@ -597,6 +602,8 @@ BPMux.prototype._process_header = function (buf)
     switch (type)
     {
         case TYPE_END:
+            duplex._ended = true;
+            duplex._check_remove();
             duplex.push(null);
             break;
 
@@ -657,9 +664,9 @@ BPMux.prototype._send_handshake = function (duplex, handshake_data)
     buf.writeUInt32BE(Math.max(duplex._readableState.highWaterMark - duplex._readableState.length, 0), 5, true);
     handshake_data.copy(buf, 9);
 
-    this._out_stream.write(buf);
-
     duplex._handshake_sent = true;
+
+    this._out_stream.write(buf);
 
     this._send();
 };
@@ -708,7 +715,7 @@ BPMux.prototype._send_status = function (duplex)
     this._out_stream.write(buf);
 };
 
-BPMux.prototype._send = function ()
+BPMux.prototype.__send = function ()
 {
     var ths = this, space, output, n;
 
@@ -807,6 +814,26 @@ BPMux.prototype._send = function ()
     }
 };
 
+BPMux.prototype._send = function ()
+{
+    this._send_requested = true;
+
+    if (this._sending)
+    {
+        return;
+    }
+
+    this._sending = true;
+
+    while (this._send_requested)
+    {
+        this._send_requested = false;
+        this.__send();
+    }
+
+    this._sending = false;
+};
+
 /**
 Multiplex a new `stream.Duplex` over the carrier.
 
@@ -839,7 +866,6 @@ BPMux.prototype.multiplex = function (options, cb)
     if (options && (options.channel !== undefined))
     {
         duplex = new BPDuplex(options, this, options.channel);
-        this._duplexes[options.channel] = duplex;
         return cb(null, duplex);
     }
 
@@ -852,10 +878,7 @@ BPMux.prototype.multiplex = function (options, cb)
         if (this._duplexes[chan] === undefined)
         {
             duplex = new BPDuplex(options, this, chan);
-
-            this._duplexes[chan] = duplex;
             this._chan = next;
-
             return cb(null, duplex);
         }
 
