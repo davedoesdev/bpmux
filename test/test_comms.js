@@ -31,6 +31,7 @@ WithOptions.prototype.toString = function ()
 
 function drain()
 {
+    /*jshint validthis: true */
     var buf;
     do
     {
@@ -220,6 +221,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
     function multiplex(n, f, initiator_mux, responder_mux)
     {
+        /*jshint validthis: true */
         var responder_chans = [],
             title = this.test.title;
 
@@ -1053,6 +1055,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             cb();
         });
 
+        sender._mux._out_stream.setMaxListeners(0);
         sender._mux._out_stream.on('drain', function ()
         {
             out_stream_drain_called = true;
@@ -1364,6 +1367,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         function check_handshake_this(buf)
         {
+            /*jshint validthis: true */
             if (this.name === 'client')
             {
                 expect(this).to.equal(client_mux);

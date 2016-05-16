@@ -1,5 +1,10 @@
+sudo: required
+dist: trusty
 language: node_js
-node_js: "0.12"
+node_js:
+  - 0.12
+  - 4
+  - 6
 env:
   - TARGET=test-coverage
   - TARGET=test-browser

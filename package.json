@@ -1,7 +1,7 @@
 {
   "name": "bpmux",
   "description": "Node stream multiplexing with back-pressure on each stream",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "homepage": "https://github.com/davedoesdev/bpmux",
   "author": {
     "name": "David Halls",
@@ -38,33 +38,30 @@
     "demux"
   ],
   "engines": {
-    "node": ">= 0.10"
+    "node": ">= 0.12"
   },
   "dependencies": {
     "frame-stream": "~1.1.1"
   },
   "devDependencies": {
-    "chai": "~2.3.0",
-    "coveralls": "~2.11.2",
-    "grunt": "~0.4.5",
-    "grunt-apidox": "~0.1.7",
-    "grunt-cafe-mocha": "~0.1.13",
-    "grunt-cli": "~0.1.13",
-    "grunt-exec": "~0.4.6",
-    "grunt-jslint": "~1.1.14",
-    "grunt-webpack": "~1.0.8",
-    "webpack": "1.x",
-    "webpack-dev-server": "1.x",
-    "node-libs-browser": ">= 0.4.0 <=0.6.0",
-    "istanbul": "~0.3.14",
-    "primus": "~3.0.2",
-    "primus-backpressure": "~0.2.3",
-    "ws": "~0.7.2",
-    "tmp": "~0.0.26",
-    "async": "~1.0.0",
-    "grunt-node-webkit-builder": "~1.0.2",
+    "grunt": "~1.0.1",
+    "grunt-contrib-jshint": "~1.0.0",
+    "grunt-mocha-test": "~0.12.7",
+    "grunt-apidox": "~0.1.9",
+    "grunt-shell": "~1.3.0",
+    "mocha": "~2.4.5",
+    "chai": "~3.5.0",
+    "istanbul": "~0.4.3",
+    "coveralls": "~2.11.9",
+    "webpack": "2.1.0-beta.7",
+    "primus": "~5.2.1",
+    "primus-backpressure": "~1.0.0",
+    "ws": "~1.1.0",
+    "tmp": "~0.0.28",
+    "async": "~1.5.2",
+    "nw-builder": "~2.2.0",
     "grunt-env": "~0.4.4",
-    "serve-static": "~1.10.0",
-    "finalhandler": "~0.4.0"
+    "serve-static": "~1.10.2",
+    "finalhandler": "~0.4.1"
   }
 }

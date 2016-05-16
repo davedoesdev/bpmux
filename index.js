@@ -678,7 +678,7 @@ BPMux.prototype._send_status = function (duplex)
     if (this._finished ||
         (duplex._remote_seq === undefined) ||
         !duplex._handshake_sent ||
-        this._reading_duplex)
+        (this._reading_duplex === duplex))
     {
         return;
     }

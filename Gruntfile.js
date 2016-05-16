@@ -9,13 +9,8 @@ module.exports = function (grunt)
 {
     grunt.initConfig(
     {
-        jslint: {
-            all: {
-                src: [ '*.js', 'test/*.js' ],
-                directives: {
-                    white: true
-                }
-            }
+        jshint: {
+            src: [ '*.js', 'test/*.js' ]
         },
 
         env: {
@@ -24,7 +19,7 @@ module.exports = function (grunt)
             }
         },
 
-        cafemocha: {
+        mochaTest: {
             default: {
                 src: [ 'test/test_tcp.js', 'test/test_channel_full.js' ],
                 options: {
@@ -37,13 +32,6 @@ module.exports = function (grunt)
             examples: 'test/test_examples.js'
         },
 
-        nodewebkit: {
-            options: {
-                platforms: [ 'linux64' ]
-            },
-            src: 'test/fixtures/nw/**'
-        },
-
         apidox: {
             input: [ 'index.js', 'events_doc.js' ],
             output: 'README.md',
@@ -51,70 +39,57 @@ module.exports = function (grunt)
             extraHeadingLevels: 1
         },
 
-        exec: {
+        shell: {
             cover: {
-                cmd: './node_modules/.bin/istanbul cover -x Gruntfile.js ./node_modules/.bin/grunt -- test-fast',
+                command: './node_modules/.bin/istanbul cover -x Gruntfile.js ./node_modules/.bin/grunt -- test-fast',
                 maxBuffer: 10000 * 1024
             },
 
             check_cover: {
-                cmd: './node_modules/.bin/istanbul check-coverage --statement 100 --branch 100 --function 100 --line 100'
+                command: './node_modules/.bin/istanbul check-coverage --statement 100 --branch 100 --function 100 --line 100'
             },
 
             coveralls: {
-                cmd: 'cat coverage/lcov.info | coveralls'
+                command: 'cat coverage/lcov.info | coveralls'
+            },
+
+            // can we use -r to run directly?
+            nw_build: {
+                command: './node_modules/.bin/nwbuild -p linux64 test/fixtures/nw/**'
             },
 
             bpmux_test: {
-                cmd: './build/bpmux-test/linux64/bpmux-test'
-            }
-        },
+                command: './build/bpmux-test/linux64/bpmux-test'
+            },
 
-        webpack: {
             bundle: {
-                entry: path.join(__dirname, 'test', 'fixtures', 'webpack', 'bundler.js'),
-                output: {
-                    path: path.join(__dirname, 'test', 'fixtures', 'webpack'),
-                    filename: 'bundle.js'
-                },
-                stats: {
-                    modules: true
-                }
+                command: './node_modules/.bin/webpack test/fixtures/webpack/bundler.js test/fixtures/webpack/bundle.js'
             },
 
             bundle_example: {
-                entry: path.join(__dirname, 'test', 'fixtures', 'example', 'bundler.js'),
-                output: {
-                    path: path.join(__dirname, 'test', 'fixtures', 'example'),
-                    filename: 'bundle.js'
-                },
-                stats: {
-                    modules: true
-                }
+                command: './node_modules/.bin/webpack test/fixtures/example/bundler.js test/fixtures/example/bundle.js'
             }
         }
     });
     
-    grunt.loadNpmTasks('grunt-jslint');
-    grunt.loadNpmTasks('grunt-cafe-mocha');
+    grunt.loadNpmTasks('grunt-contrib-jshint');
+    grunt.loadNpmTasks('grunt-mocha-test');
     grunt.loadNpmTasks('grunt-apidox');
-    grunt.loadNpmTasks('grunt-exec');
-    grunt.loadNpmTasks('grunt-webpack');
-    grunt.loadNpmTasks('grunt-node-webkit-builder');
+    grunt.loadNpmTasks('grunt-shell');
     grunt.loadNpmTasks('grunt-env');
 
-    grunt.registerTask('lint', 'jslint:all');
-    grunt.registerTask('test', 'cafemocha:default');
-    grunt.registerTask('test-fast', ['env:fast', 'cafemocha:default']);
-    grunt.registerTask('test-examples', [ 'webpack:bundle_example',
-                                          'cafemocha:examples' ]);
+    grunt.registerTask('lint', 'jshint');
+    grunt.registerTask('test', 'mochaTest:default');
+    grunt.registerTask('test-fast', ['env:fast', 'mochaTest:default']);
+    grunt.registerTask('test-examples', [ 'shell:bundle_example',
+                                          'mochaTest:examples' ]);
     grunt.registerTask('test-browser', [ 'save-primus',
-                                         'webpack:bundle',
-                                         'nodewebkit',
-                                         'exec:bpmux_test' ]);
+                                         'shell:bundle',
+                                         'shell:nw_build',
+                                         'shell:bpmux_test' ]);
     grunt.registerTask('docs', 'apidox');
-    grunt.registerTask('coverage', ['exec:cover', 'exec:check_cover']);
-    grunt.registerTask('coveralls', 'exec:coveralls');
+    grunt.registerTask('coverage', ['shell:cover', 'shell:check_cover']);
+    grunt.registerTask('coveralls', 'shell:coveralls');
     grunt.registerTask('default', ['lint', 'test']);
 
     grunt.registerTask('save-primus', function ()
