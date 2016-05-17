@@ -56,7 +56,11 @@ module.exports = function (grunt)
             },
 
             nw_build: {
-                command: './node_modules/.bin/nwbuild -p linux64 -v 0.12.3 test/fixtures/nw'
+                command: [
+                    'find node_modules -mindepth 1 -maxdepth 1 -exec rm -f test/fixtures/nw/{} \\;',
+                    'find node_modules -mindepth 1 -maxdepth 1 -not -name nw-builder -exec ln -sf ../../../../{} test/fixtures/nw/{} \\;',
+                    './node_modules/.bin/nwbuild --quiet -p linux64 -v 0.12.3 test/fixtures/nw'
+                ].join('&&')
             },
 
             bpmux_test: {
