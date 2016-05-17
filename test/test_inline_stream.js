@@ -71,8 +71,8 @@ LeftDuplex.prototype._write = function (chunk, encoding, cb)
 
 describe('inline stream', function ()
 {
-	it('should multiplex over inline stream', function (cb)
-	{
+    it('should multiplex over inline stream', function (cb)
+    {
         var left = new LeftDuplex(),
             right = left.right,
             lmux = new BPMux(left),
@@ -150,6 +150,54 @@ describe('inline stream', function ()
                         break;
                     }
                     bufs.push(data);
+                }
+            });
+        });
+    });
+
+    it('should ping-pong', function (cb)
+    {
+        var left = new LeftDuplex(),
+            right = left.right,
+            lmux = new BPMux(left),
+            rmux = new BPMux(right);
+
+        rmux.multiplex(function (err, duplex)
+        {
+            if (err) { return cb(err); }
+
+            duplex.once('readable', function ()
+            {
+                expect(this.read()[0]).to.equal(1);
+
+                duplex.on('readable', function ()
+                {
+                    while (true)
+                    {
+                        var data = this.read();
+                        if (data === null) { break; }
+                        expect(data[0]).to.equal(3);
+                    }
+                });
+
+                this.end(new Buffer([2]));
+            });
+
+            duplex.on('end', cb);
+        });
+
+        lmux.on('handshake', function (duplex)
+        {
+            duplex.write(new Buffer([1]));
+
+            duplex.on('readable', function ()
+            {
+                while (true)
+                {
+                    var data = this.read();
+                    if (data === null) { break; }
+                    expect(data[0]).to.equal(2);
+                    this.end(new Buffer([3]));
                 }
             });
         });
