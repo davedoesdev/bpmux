@@ -1577,10 +1577,6 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         {
             expect(err).to.equal(null);
             expect(duplex._handshake_sent).to.equal(false);
-            setImmediate(function ()
-            {
-                expect(duplex._handshake_sent).to.equal(true);
-            });
             duplex.on('handshake', function (handshake_data, delay_handshake)
             {
                 expect(handshake_data.toString()).to.equal('bar');
