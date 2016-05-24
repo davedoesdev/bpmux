@@ -1,4 +1,5 @@
 /*global describe: false,
+         beforeEach: false,
          it: false */
 /*jshint node: true */
 "use strict";
@@ -71,13 +72,20 @@ LeftDuplex.prototype._write = function (chunk, encoding, cb)
 
 describe('inline stream', function ()
 {
+    var left, right, lmux, rmux;
+
+    beforeEach(function ()
+    {
+        left = new LeftDuplex();
+        right = left.right;
+        lmux = new BPMux(left);
+        lmux.name = "left";
+        rmux = new BPMux(right);
+        rmux.name = "right";
+    });
+
     it('should multiplex over inline stream', function (cb)
     {
-        var left = new LeftDuplex(),
-            right = left.right,
-            lmux = new BPMux(left),
-            rmux = new BPMux(right);
-
         rmux.once('handshake', function (duplex, hsdata)
         {
             expect(hsdata.toString()).to.equal('left hs');
@@ -157,11 +165,6 @@ describe('inline stream', function ()
 
     it('should ping-pong', function (cb)
     {
-        var left = new LeftDuplex(),
-            right = left.right,
-            lmux = new BPMux(left),
-            rmux = new BPMux(right);
-
         rmux.multiplex(function (err, duplex)
         {
             if (err) { return cb(err); }
@@ -199,6 +202,36 @@ describe('inline stream', function ()
                     expect(data[0]).to.equal(2);
                     this.end(new Buffer([3]));
                 }
+            });
+        });
+    });
+
+    it('should emit handshake on multiplexed duplex', function (cb)
+    {
+        // right mux is intially in sync mode so need to send some data
+        lmux.multiplex(function (err, control)
+        {
+            if (err) { return cb(err); }
+            lmux.on('handshake', function (duplex, hdata, delay)
+            {
+                if (duplex !== control)
+                {
+                    return;
+                }
+
+                // give right mux chance to exit sync mode so it will
+                // emit readable and send handshake straight away
+                process.nextTick(function ()
+                {
+                    lmux.multiplex(function (err, duplex)
+                    {
+                        if (err) { return cb(err); }
+                        duplex.on('handshake', function ()
+                        {
+                            cb();
+                        });
+                    });
+                });
             });
         });
     });

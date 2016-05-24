@@ -296,11 +296,6 @@ function BPDuplex(options, mux, chan)
     });
 
     mux._duplexes[chan] = this;
-
-    if (!options._delay_handshake)
-    {
-        this._send_handshake(options.handshake_data);
-    }
 }
 
 util.inherits(BPDuplex, Duplex);
@@ -383,11 +378,7 @@ function BPMux(carrier, options)
     this._header_buffers = [];
     this._header_buffer_len = 0;
     this._reading_duplex = null;
-    this._peer_multiplex_options = util._extend(util._extend(
-        {}, options.peer_multiplex_options || {}),
-        {
-            _delay_handshake: true
-        });
+    this._peer_multiplex_options = options.peer_multiplex_options;
     this._parse_handshake_data = options.parse_handshake_data;
     this._coalesce_writes = options.coalesce_writes;
     this._carrier = carrier;
@@ -862,11 +853,25 @@ BPMux.prototype.multiplex = function (options, cb)
         cb = options;
         options = undefined;
     }
-    
-    if (options && (options.channel !== undefined))
+
+    options = options || {};
+
+    function cb2()
+    {
+        if (!options._delay_handshake)
+        {
+            setImmediate(function ()
+            {
+                duplex._send_handshake(options.handshake_data);
+            });
+        }
+        return cb(null, duplex);
+    }
+
+    if (options.channel !== undefined)
     {
         duplex = new BPDuplex(options, this, options.channel);
-        return cb(null, duplex);
+        return cb2();
     }
 
     chan = this._chan;
@@ -879,7 +884,7 @@ BPMux.prototype.multiplex = function (options, cb)
         {
             duplex = new BPDuplex(options, this, chan);
             this._chan = next;
-            return cb(null, duplex);
+            return cb2();
         }
 
         chan = next;
