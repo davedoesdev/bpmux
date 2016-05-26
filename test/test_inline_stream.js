@@ -79,9 +79,7 @@ describe('inline stream', function ()
         left = new LeftDuplex();
         right = left.right;
         lmux = new BPMux(left);
-        lmux.name = "left";
         rmux = new BPMux(right);
-        rmux.name = "right";
     });
 
     it('should multiplex over inline stream', function (cb)
@@ -232,6 +230,76 @@ describe('inline stream', function ()
                         });
                     });
                 });
+            });
+        });
+    });
+
+    it('should pass delay to one side when both sides multiplex a duplex with the same channel number', function (cb)
+    {
+        var rdelay = null;
+
+        lmux.multiplex(function (err, duplex)
+        {
+            if (err) { return cb(err); }
+            expect(duplex.get_channel()).to.equal(0);
+
+            duplex.on('handshake', function (hdata, delay)
+            {
+                // handshake sent so delay will be null
+                expect(delay).to.equal(null);
+                expect(rdelay).not.to.equal(null); // see below
+                cb();
+            });
+        });
+
+        rmux.multiplex(function (err, duplex)
+        {
+            if (err) { return cb(err); }
+            expect(duplex.get_channel()).to.equal(0);
+
+            duplex.on('handshake', function (hdata, delay)
+            {
+                // handshake not sent yet so delay won't be null
+                rdelay = delay;
+            });
+
+            // when rmux comes to send its original handshake (from the
+            // multiplex call), it won't be sent because we already sent
+            // one in response to the one from lmux (we didn't delay it)
+        });
+    });
+
+    it('should support giving a different channel range to each side', function (cb)
+    {
+        left = new LeftDuplex();
+        right = left.right;
+        lmux = new BPMux(left);
+        rmux = new BPMux(right, { high_channels: true });
+
+        var ldelay;
+
+        lmux.multiplex(function (err, duplex)
+        {
+            if (err) { return cb(err); }
+            expect(duplex.get_channel()).to.equal(0);
+
+            duplex.on('handshake', function (hdata, delay)
+            {
+                ldelay = delay;
+                // right handshake won't be received yet as different channel
+            });
+        });
+
+        rmux.multiplex(function (err, duplex)
+        {
+            if (err) { return cb(err); }
+            expect(duplex.get_channel()).to.equal(Math.pow(2, 31));
+
+            duplex.on('handshake', function (hdata, delay)
+            {
+                expect(delay).to.equal(null);
+                expect(ldelay).to.equal(null);
+                cb();
             });
         });
     });

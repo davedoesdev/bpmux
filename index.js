@@ -363,6 +363,8 @@ Constructor for a `BPMux` object which multiplexes more than one [`stream.Duplex
   - `{Function} [parse_handshake_data(handshake_data)]` When a new stream is multiplexed, the `BPMux` objects at each end of the carrier exchange a handshake message. You can supply application-specific handshake data to add to the handshake message (see [`BPMux.prototype.multiplex`](#bpmuxprototypemultiplexoptions-cb) and [`BPMux.events.handshake`](#bpmuxeventshandshakeduplex-handshake_data-delay_handshake)). By default, when handshake data from the peer is received, it's passed to your application as a raw [`Buffer`](https://nodejs.org/api/buffer.html#buffer_buffer). Use `parse_handshake_data` to specify a custom parser. It will receive the `Buffer` as an argument and should return a value which makes sense to your application.
   
   - `{Boolean} [coalesce_writes]` Whether to batch together writes to the carrier. When the carrier indicates it's ready to receive data, its spare capacity is shared equally between the multiplexed streams. By default, the data from each stream is written separately to the carrier. Specify `true` to write all the data to the carrier in a single write. Depending on the carrier, this can be more performant.
+
+  - `{Boolean} [high_channels]` `BPMux` assigns unique channel numbers to multiplexed streams. By default, it assigns numbers in the range [0..2^31). If your application can synchronise the two `BPMux` instances on each end of the carrier stream so they never call [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions-cb) at the same time then you don't need to worry about channel number clashes. For example, one side of the carrier could always call [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions-cb) and the other listen for [`handshake`](https://github.com/davedoesdev/bpmux#bpmuxeventshandshakeduplex-handshake_data-delay_handshake) events. Or they could take it in turns. If you can't synchronise both sides of the carrier, you can get one side to use a different range by specifying `high_channels` as `true`. The `BPMux` with `high_channels` set to `true` will assign channel numbers in the range [2^31..2^32).
 */
 function BPMux(carrier, options)
 {
@@ -370,9 +372,10 @@ function BPMux(carrier, options)
 
     options = options || {};
 
-    this._max_duplexes = Math.pow(2, 32);
+    this._max_duplexes = Math.pow(2, 31);
     this._duplexes = {};
     this._chan = 0;
+    this._chan_offset = options.high_channels ? this._max_duplexes : 0;
     this._finished = false;
     this._ended = false;
     this._header_buffers = [];
@@ -880,9 +883,9 @@ BPMux.prototype.multiplex = function (options, cb)
     {
         next = (chan + 1) % this._max_duplexes;
 
-        if (this._duplexes[chan] === undefined)
+        if (this._duplexes[chan + this._chan_offset] === undefined)
         {
-            duplex = new BPDuplex(options, this, chan);
+            duplex = new BPDuplex(options, this, chan + this._chan_offset);
             this._chan = next;
             return cb2();
         }
