@@ -50,13 +50,9 @@ net.createServer(function (c)
 
     function multiplex(n)
     {
-        mux.multiplex(function (err, duplex)
-        {
-            assert.ifError(err);
-            var data = crypto.randomBytes(n * 100);
-            duplex.end(data);
-            sent.push(data.toString('hex'));
-        });
+        var data = crypto.randomBytes(n * 100);
+        mux.multiplex().end(data);
+        sent.push(data.toString('hex'));
     }
 
     for (i = 1; i <= 10; i += 1)
@@ -96,44 +92,39 @@ http.createServer(function (req, res)
 
         function multiplex(n)
         {
-            mux.multiplex({ handshake_data: new Buffer([n]) },
-            function (err, duplex)
+            var buf = crypto.randomBytes(10 * 1024),
+                buf_stream = new stream.PassThrough(),
+                bufs = [],
+                duplex = mux.multiplex({ handshake_data: new Buffer([n]) });
+
+            buf_stream.end(buf);
+            buf_stream.pipe(duplex);
+
+            duplex.on('readable', function ()
             {
-                assert.ifError(err);
+                var data;
 
-                var buf = crypto.randomBytes(10 * 1024),
-                    buf_stream = new stream.PassThrough(),
-                    bufs = [];
-
-                buf_stream.end(buf);
-                buf_stream.pipe(duplex);
-
-                duplex.on('readable', function ()
+                while (true)
                 {
-                    var data;
-
-                    while (true)
+                    data = this.read();
+                    if (data === null)
                     {
-                        data = this.read();
-                        if (data === null)
-                        {
-                            break;
-                        }
-                        bufs.push(data);
+                        break;
                     }
-                });
+                    bufs.push(data);
+                }
+            });
 
-                duplex.on('end', function ()
+            duplex.on('end', function ()
+            {
+                console.log('end', n);
+                ended += 1;
+                assert(ended <= 10);
+                assert.deepEqual(Buffer.concat(bufs), buf);
+                if (ended === 10)
                 {
-                    console.log('end', n);
-                    ended += 1;
-                    assert(ended <= 10);
-                    assert.deepEqual(Buffer.concat(bufs), buf);
-                    if (ended === 10)
-                    {
-                        cb();
-                    }
-                });
+                    cb();
+                }
             });
         }
 

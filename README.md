@@ -57,13 +57,9 @@ net.createServer(function (c)
 
     function multiplex(n)
     {
-        mux.multiplex(function (err, duplex)
-        {
-            assert.ifError(err);
-            var data = crypto.randomBytes(n * 100);
-            duplex.end(data);
-            sent.push(data.toString('hex'));
-        });
+        var data = crypto.randomBytes(n * 100);
+        mux.multiplex().end(data);
+        sent.push(data.toString('hex'));
     }
 
     for (i = 1; i <= 10; i += 1)
@@ -103,40 +99,35 @@ http.createServer(function (req, res)
 
         function multiplex(n)
         {
-            mux.multiplex({ handshake_data: new Buffer([n]) },
-            function (err, duplex)
+            var buf = crypto.randomBytes(10 * 1024),
+                buf_stream = new stream.PassThrough(),
+                bufs = [],
+                duplex = mux.multiplex({ handshake_data: new Buffer([n]) });
+
+            buf_stream.end(buf);
+            buf_stream.pipe(duplex);
+
+            duplex.on('readable', function ()
             {
-                assert.ifError(err);
+                var data;
 
-                var buf = crypto.randomBytes(10 * 1024),
-                    buf_stream = new stream.PassThrough(),
-                    bufs = [];
-
-                buf_stream.end(buf);
-                buf_stream.pipe(duplex);
-
-                duplex.on('readable', function ()
+                while (true)
                 {
-                    var data;
-
-                    while (true)
+                    data = this.read();
+                    if (data === null)
                     {
-                        data = this.read();
-                        if (data === null)
-                        {
-                            break;
-                        }
-                        bufs.push(data);
+                        break;
                     }
-                });
+                    bufs.push(data);
+                }
+            });
 
-                duplex.on('end', function ()
-                {
-                    console.log('end', n);
-                    ended += 1;
-                    assert(ended <= 10);
-                    assert.deepEqual(Buffer.concat(bufs), buf);
-                });
+            duplex.on('end', function ()
+            {
+                console.log('end', n);
+                ended += 1;
+                assert(ended <= 10);
+                assert.deepEqual(Buffer.concat(bufs), buf);
             });
         }
 
@@ -249,7 +240,7 @@ grunt lint
 <a name="tableofcontents"></a>
 
 - <a name="toc_bpmuxcarrrier-options"></a>[BPMux](#bpmuxcarrrier-options)
-- <a name="toc_bpmuxprototypemultiplexoptions-cb"></a><a name="toc_bpmuxprototype"></a>[BPMux.prototype.multiplex](#bpmuxprototypemultiplexoptions-cb)
+- <a name="toc_bpmuxprototypemultiplexoptions"></a><a name="toc_bpmuxprototype"></a>[BPMux.prototype.multiplex](#bpmuxprototypemultiplexoptions)
 - <a name="toc_bpmuxeventspeer_multiplexduplex"></a><a name="toc_bpmuxevents"></a>[BPMux.events.peer_multiplex](#bpmuxeventspeer_multiplexduplex)
 - <a name="toc_bpmuxeventshandshakeduplex-handshake_data-delay_handshake"></a>[BPMux.events.handshake](#bpmuxeventshandshakeduplex-handshake_data-delay_handshake)
 
@@ -267,17 +258,17 @@ grunt lint
 
     - `{Boolean} [check_read_overflow]` Whether to check if more data than expected is being received. If `true` and the `Duplex`'s high-water mark for reading is exceeded then the `Duplex` emits an `error` event. This should not normally occur unless you add data yourself using [`readable.unshift`](http://nodejs.org/api/stream.html#stream_readable_unshift_chunk) &mdash; in which case you should set `check_read_overflow` to `false`. Defaults to `true`.
 
-  - `{Function} [parse_handshake_data(handshake_data)]` When a new stream is multiplexed, the `BPMux` objects at each end of the carrier exchange a handshake message. You can supply application-specific handshake data to add to the handshake message (see [`BPMux.prototype.multiplex`](#bpmuxprototypemultiplexoptions-cb) and [`BPMux.events.handshake`](#bpmuxeventshandshakeduplex-handshake_data-delay_handshake)). By default, when handshake data from the peer is received, it's passed to your application as a raw [`Buffer`](https://nodejs.org/api/buffer.html#buffer_buffer). Use `parse_handshake_data` to specify a custom parser. It will receive the `Buffer` as an argument and should return a value which makes sense to your application.
+  - `{Function} [parse_handshake_data(handshake_data)]` When a new stream is multiplexed, the `BPMux` objects at each end of the carrier exchange a handshake message. You can supply application-specific handshake data to add to the handshake message (see [`BPMux.prototype.multiplex`](#bpmuxprototypemultiplexoptions) and [`BPMux.events.handshake`](#bpmuxeventshandshakeduplex-handshake_data-delay_handshake)). By default, when handshake data from the peer is received, it's passed to your application as a raw [`Buffer`](https://nodejs.org/api/buffer.html#buffer_buffer). Use `parse_handshake_data` to specify a custom parser. It will receive the `Buffer` as an argument and should return a value which makes sense to your application.
   
   - `{Boolean} [coalesce_writes]` Whether to batch together writes to the carrier. When the carrier indicates it's ready to receive data, its spare capacity is shared equally between the multiplexed streams. By default, the data from each stream is written separately to the carrier. Specify `true` to write all the data to the carrier in a single write. Depending on the carrier, this can be more performant.
 
-  - `{Boolean} [high_channels]` `BPMux` assigns unique channel numbers to multiplexed streams. By default, it assigns numbers in the range [0..2^31). If your application can synchronise the two `BPMux` instances on each end of the carrier stream so they never call [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions-cb) at the same time then you don't need to worry about channel number clashes. For example, one side of the carrier could always call [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions-cb) and the other listen for [`handshake`](https://github.com/davedoesdev/bpmux#bpmuxeventshandshakeduplex-handshake_data-delay_handshake) events. Or they could take it in turns. If you can't synchronise both sides of the carrier, you can get one side to use a different range by specifying `high_channels` as `true`. The `BPMux` with `high_channels` set to `true` will assign channel numbers in the range [2^31..2^32).
+  - `{Boolean} [high_channels]` `BPMux` assigns unique channel numbers to multiplexed streams. By default, it assigns numbers in the range [0..2^31). If your application can synchronise the two `BPMux` instances on each end of the carrier stream so they never call [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) at the same time then you don't need to worry about channel number clashes. For example, one side of the carrier could always call [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) and the other listen for [`handshake`](https://github.com/davedoesdev/bpmux#bpmuxeventshandshakeduplex-handshake_data-delay_handshake) events. Or they could take it in turns. If you can't synchronise both sides of the carrier, you can get one side to use a different range by specifying `high_channels` as `true`. The `BPMux` with `high_channels` set to `true` will assign channel numbers in the range [2^31..2^32).
 
 <sub>Go: [TOC](#tableofcontents)</sub>
 
 <a name="bpmuxprototype"></a>
 
-## BPMux.prototype.multiplex([options], cb)
+## BPMux.prototype.multiplex([options])
 
 > Multiplex a new `stream.Duplex` over the carrier.
 
@@ -292,10 +283,14 @@ grunt lint
 
   - `{Integer} [channel]` Unique number for the new stream. `BPMux` identifies each multiplexed stream by giving it a unique number, which it allocates automatically. If you want to do the allocation yourself, specify a channel number here. It's very unlikely you'll need to do this but the option is there. `Duplex` objects managed by `BPMux` expose a `get_channel` method to retrieve their channel number. Defaults to automatic allocation.
   
-- `{Function} cb` Function called with the new `Duplex`. It's passed the following arguments: 
-  - `{Object} err` If an error occurred then details of the error, otherwise `null`.
 
-  - `{Duplex} duplex` The new `Duplex` which is multiplexed over the carrier.
+**Return:**
+
+`{Duplex}` The new `Duplex` which is multiplexed over the carrier.
+
+**Throws:**
+
+- `{Error}` If there are no channel numbers left to allocate to the new stream.
 
 <sub>Go: [TOC](#tableofcontents) | [BPMux.prototype](#toc_bpmuxprototype)</sub>
 
@@ -320,7 +315,7 @@ A `BPMux` object emits a `peer_multiplex` event when it detects a new multiplexe
 A `BPMux` object emits a `handshake` event when it receives a handshake message from its peer on the carrier stream. This can happen in two cases: 
 
 1. The `BPMux` object is processing a handshake message for a new multiplexed stream the peer created and it hasn't seen before. Note the `handshake` event is emitted after the [`peer_multiplex`](#bpmuxeventspeer_multiplexduplex) event.
-2. Your application previously called [`multiplex`](#bpmuxprototypemultiplexoptions-cb) on its `BPMux` object to multiplex a new stream over the carrier and now the peer has replied with a handshake message.
+2. Your application previously called [`multiplex`](#bpmuxprototypemultiplexoptions) on its `BPMux` object to multiplex a new stream over the carrier and now the peer has replied with a handshake message.
 
 **Parameters:**
 

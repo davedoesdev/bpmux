@@ -79,11 +79,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             {
                 expect(this._mux._duplexes[this._chan]).to.equal(undefined);
                 this._mux._chan = this._chan;
-                this._mux.multiplex({ _delay_handshake: true }, function (err, d)
-                {
-                    expect(err).to.equal(null);
-                    expect(d._chan).to.equal(duplex._chan);
-                });
+                expect(this._mux.multiplex({ _delay_handshake: true })._chan).to.equal(duplex._chan);
             }
             ended += 1;
             if (check) { check(); }
@@ -263,7 +259,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             expect(initiator_mux._chan).to.equal(i);
 
-            initiator_mux.multiplex(title instanceof WithOptions ?
+            initiator_duplex = initiator_mux.multiplex(
+                title instanceof WithOptions ?
                 util._extend(
                 {
                     handshake_data: initiator_buf
@@ -271,23 +268,19 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 {
                     handshake_data: initiator_buf,
                     highWaterMark: fast ? 2048 : 16384
-                },
-            function (err, duplex)
+                });
+
+            expect(initiator_duplex._chan).to.equal(i);
+            add_duplex(initiator_duplex);
+            initiator_duplex.name = initiator_mux.name;
+            if ((!wait_for_handshake) || responder_duplex)
             {
-                if (err) { return cb(err); }
-                expect(duplex._chan).to.equal(i);
-                add_duplex(duplex);
-                initiator_duplex = duplex;
-                initiator_duplex.name = initiator_mux.name;
-                if ((!wait_for_handshake) || responder_duplex)
+                f(initiator_duplex, wait_for_handshake ? responder_duplex :
                 {
-                    f(initiator_duplex, wait_for_handshake ? responder_duplex :
-                    {
-                        _mux: responder_mux,
-                        name: responder_mux.name
-                    }, cb);
-                }
-            });
+                    _mux: responder_mux,
+                    name: responder_mux.name
+                }, cb);
+            }
         };
     }
 
@@ -1570,20 +1563,17 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                        }),
     function (cb)
     {
-        client_mux.multiplex(
+        var duplex = client_mux.multiplex(
         {
             handshake_data: new ClientBuffer('foo')
-        }, function (err, duplex)
+        });
+        expect(duplex._handshake_sent).to.equal(false);
+        duplex.on('handshake', function (handshake_data, delay_handshake)
         {
-            expect(err).to.equal(null);
-            expect(duplex._handshake_sent).to.equal(false);
-            duplex.on('handshake', function (handshake_data, delay_handshake)
-            {
-                expect(handshake_data.toString()).to.equal('bar');
-                expect(duplex._handshake_sent).to.equal(true);
-                expect(delay_handshake).to.equal(null);
-                cb();
-            });
+            expect(handshake_data.toString()).to.equal('bar');
+            expect(duplex._handshake_sent).to.equal(true);
+            expect(delay_handshake).to.equal(null);
+            cb();
         });
 
         server_mux.on('handshake', function (duplex, handshake_data, delay_handshake)
@@ -1607,121 +1597,106 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             }
         }
 
-        client_mux.multiplex(
+        var client_duplex100 = client_mux.multiplex(
         {
             channel: 100
-        }, function (err, client_duplex100)
+        });
+        add_duplex(client_duplex100);
+        expect(client_duplex100.get_channel()).to.equal(100);
+        client_duplex100.write('a');
+        client_duplex100.on('readable', function ()
         {
-            expect(err).to.equal(null);
-            add_duplex(client_duplex100);
-            expect(client_duplex100.get_channel()).to.equal(100);
-            client_duplex100.write('a');
-            client_duplex100.on('readable', function ()
+            var data = this.read();
+            if (data !== null)
             {
-                var data = this.read();
-                if (data !== null)
-                {
-                    expect(c100).to.equal(false);
-                    c100 = true;
-                    expect(data.toString()).to.equal('b');
-                    check1();
-                }
-            });
+                expect(c100).to.equal(false);
+                c100 = true;
+                expect(data.toString()).to.equal('b');
+                check1();
+            }
         });
 
-        server_mux.multiplex(
+        var server_duplex100 = server_mux.multiplex(
         {
             channel: 100
-        }, function (err, server_duplex100)
+        });
+        add_duplex(server_duplex100);
+        expect(server_duplex100.get_channel()).to.equal(100);
+        server_duplex100.write('b');
+        server_duplex100.on('readable', function ()
         {
-            expect(err).to.equal(null);
-            add_duplex(server_duplex100);
-            expect(server_duplex100.get_channel()).to.equal(100);
-            server_duplex100.write('b');
-            server_duplex100.on('readable', function ()
+            var data = this.read();
+            if (data !== null)
             {
-                var data = this.read();
-                if (data !== null)
-                {
-                    expect(s100).to.equal(false);
-                    s100 = true;
-                    expect(data.toString()).to.equal('a');
-                    check1();
-                }
-            });
+                expect(s100).to.equal(false);
+                s100 = true;
+                expect(data.toString()).to.equal('a');
+                check1();
+            }
         });
 
-        client_mux.multiplex(
+        var client_duplex200 = client_mux.multiplex(
         {
             channel: 200
-        }, function (err, client_duplex200)
+        });
+        add_duplex(client_duplex200);
+        expect(client_duplex200.get_channel()).to.equal(200);
+        client_duplex200.write('c');
+        client_duplex200.on('readable', function ()
         {
-            expect(err).to.equal(null);
-            add_duplex(client_duplex200);
-            expect(client_duplex200.get_channel()).to.equal(200);
-            client_duplex200.write('c');
-            client_duplex200.on('readable', function ()
+            var data = this.read();
+            if (data !== null)
             {
-                var data = this.read();
-                if (data !== null)
-                {
-                    expect(c200).to.equal(false);
-                    c200 = true;
-                    expect(data.toString()).to.equal('d');
-                    check1();
-                }
-            });
+                expect(c200).to.equal(false);
+                c200 = true;
+                expect(data.toString()).to.equal('d');
+                check1();
+            }
         });
 
-        server_mux.multiplex(
+        var server_duplex200 = server_mux.multiplex(
         {
             channel: 200
-        }, function (err, server_duplex200)
+        });
+        add_duplex(server_duplex200);
+        expect(server_duplex200.get_channel()).to.equal(200);
+        server_duplex200.write('d');
+        server_duplex200.on('readable', function ()
         {
-            expect(err).to.equal(null);
-            add_duplex(server_duplex200);
-            expect(server_duplex200.get_channel()).to.equal(200);
-            server_duplex200.write('d');
-            server_duplex200.on('readable', function ()
+            var data = this.read();
+            if (data !== null)
             {
-                var data = this.read();
-                if (data !== null)
-                {
-                    expect(s200).to.equal(false);
-                    s200 = true;
-                    expect(data.toString()).to.equal('c');
-                    check1();
-                }
-            });
+                expect(s200).to.equal(false);
+                s200 = true;
+                expect(data.toString()).to.equal('c');
+                check1();
+            }
         });
     });
 
     it('should be able to use a control channel to ask for new duplexes', function (cb)
     {
-        client_mux.multiplex(
+        var client_duplex = client_mux.multiplex(
         {
             handshake_data: make_buffer(client_mux, 'control')
-        }, function (err, client_duplex)
+        });
+        add_duplex(client_duplex);
+        client_duplex.write('aaaaa');
+
+        var count = 0;
+
+        client_mux.on('handshake', function (duplex, handshake_data)
         {
-            expect(err).to.equal(null);
-            add_duplex(client_duplex);
-            client_duplex.write('aaaaa');
-
-            var count = 0;
-
-            client_mux.on('handshake', function (duplex, handshake_data)
+            if (handshake_data.toString() !== 'control')
             {
-                if (handshake_data.toString() !== 'control')
-                {
-                    add_duplex(duplex);
-                }
-                count += 1;
-                expect(count).to.be.at.most(6); // 1 for return handshake on control
-                if (count === 6)
-                {
-                    return cb();
-                }
-            });
+                add_duplex(duplex);
+            }
+            count += 1;
+            expect(count).to.be.at.most(6); // 1 for return handshake on control
+            if (count === 6)
+            {
+                return cb();
+            }
         });
 
         server_mux.once('handshake', function (server_duplex,
@@ -1737,15 +1712,9 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 var data = this.read(), i;
                 if (data === null) { return; }
 
-                function mux_cb(err, duplex)
-                {
-                    expect(err).to.equal(null);
-                    add_duplex(duplex);
-                }
-
                 for (i = 0; i < data.length; i += 1)
                 {
-                    server_mux.multiplex(mux_cb);
+                    add_duplex(server_mux.multiplex());
                 }
             });
         });
@@ -1753,24 +1722,21 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
     it('should support write before handshaken', function (cb)
     {
-        client_mux.multiplex(
+        var client_duplex = client_mux.multiplex(
         {
             _delay_handshake: true
-        }, function (err, client_duplex)
-        {
-            expect(err).to.equal(null);
-            client_duplex.name = 'client';
-            add_duplex(client_duplex);
-            client_duplex.end('x');
-            client_duplex._send_handshake();
+        });
+        client_duplex.name = 'client';
+        add_duplex(client_duplex);
+        client_duplex.end('x');
+        client_duplex._send_handshake();
 
-            client_duplex.on('readable', function ()
-            {
-                var data = this.read();
-                if (data === null) { return; }
-                expect(data.toString()).to.equal('y');
-                cb();
-            });
+        client_duplex.on('readable', function ()
+        {
+            var data = this.read();
+            if (data === null) { return; }
+            expect(data.toString()).to.equal('y');
+            cb();
         });
 
         /*jslint unparam: true */

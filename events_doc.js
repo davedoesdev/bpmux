@@ -16,7 +16,7 @@ BPMux.events.peer_multiplex = function (duplex) { return undefined; };
 A `BPMux` object emits a `handshake` event when it receives a handshake message from its peer on the carrier stream. This can happen in two cases: 
 
 1. The `BPMux` object is processing a handshake message for a new multiplexed stream the peer created and it hasn't seen before. Note the `handshake` event is emitted after the [`peer_multiplex`](#bpmuxeventspeer_multiplexduplex) event.
-2. Your application previously called [`multiplex`](#bpmuxprototypemultiplexoptions-cb) on its `BPMux` object to multiplex a new stream over the carrier and now the peer has replied with a handshake message.
+2. Your application previously called [`multiplex`](#bpmuxprototypemultiplexoptions) on its `BPMux` object to multiplex a new stream over the carrier and now the peer has replied with a handshake message.
 
 @param {Duplex} duplex The multiplexed stream for which a handshake message has been received. **Please note that a `handshake` event is also emitted on `duplex` immediately after `BPMux`'s `handshake` event finishes processing**. `duplex`'s `handshake` event is passed the same `handshake_data` and `delay_handshake` parameters decribed below.
 

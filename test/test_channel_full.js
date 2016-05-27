@@ -23,27 +23,18 @@ describe('channel number full event', function ()
 
         mux._max_duplexes = 3;
 
-        mux.multiplex({ _delay_handshake: true }, function (err)
-        {
-            expect(err).to.equal(null);
-        });
+        mux.multiplex({ _delay_handshake: true });
+        mux.multiplex({ _delay_handshake: true });
+        mux.multiplex({ _delay_handshake: true });
 
-        mux.multiplex({ _delay_handshake: true }, function (err)
+        function fn()
         {
-            expect(err).to.equal(null);
-        });
+            mux.multiplex({ _delay_handshake: true });
+        }
+        expect(fn).to.throw(Error);
+        expect(fn).to.throw('full');
 
-        mux.multiplex({ _delay_handshake: true }, function (err)
-        {
-            expect(err).to.equal(null);
-        });
-
-        mux.multiplex({ _delay_handshake: true }, function (err)
-        {
-            expect(err).to.be.an.instanceof(Error);
-            expect(err.message).to.equal('full');
-            cb();
-        });
+        cb();
     });
 });
 
