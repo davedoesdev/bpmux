@@ -270,5 +270,43 @@ describe('inline stream', function ()
             cb();
         });
     });
+
+    it.only('should support ending stream before sending delayed handshake',
+    function (cb)
+    {
+        rmux.on('handshake', function (duplex, hsdata, delay)
+        {
+            expect(hsdata.length).to.equal(0);
+
+            duplex.end();
+
+            var handshake = delay(),
+                bufs = [];
+
+            duplex.on('readable', function ()
+            {
+                while (true)
+                {
+                    var data = this.read();
+                    if (!data) { return; }
+                    bufs.push(data);
+                }
+            });
+
+            duplex.on('end', function ()
+            {
+                expect(bufs.length).to.equal(0);
+                handshake();
+            });
+        });
+
+        lmux.on('handshake', function (duplex, hsdata, delay)
+        {
+            expect(delay).to.equal(null);
+            cb();
+        });
+
+        lmux.multiplex().end();
+    });
 });
 

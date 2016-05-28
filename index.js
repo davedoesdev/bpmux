@@ -588,8 +588,6 @@ BPMux.prototype._process_header = function (buf)
     {
         case TYPE_END:
             duplex._ended = true;
-            duplex._check_remove();
-            duplex.push(null);
             break;
 
         case TYPE_HANDSHAKE:
@@ -607,6 +605,11 @@ BPMux.prototype._process_header = function (buf)
             if (!handshake_delayed)
             {
                 duplex._send_handshake();
+            }
+            if (duplex._ended)
+            {
+                duplex._check_remove();
+                duplex.push(null);
             }
             break;
 
