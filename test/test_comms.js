@@ -254,7 +254,11 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 add_duplex(duplex);
                 responder_duplex = duplex;
                 responder_duplex.name = responder_mux.name;
-                if (initiator_duplex) { f(initiator_duplex, responder_duplex, cb); }
+
+                if (wait_for_handshake && initiator_duplex)
+                {
+                    f(initiator_duplex, responder_duplex, cb);
+                }
             });
 
             expect(initiator_mux._chan).to.equal(i);
@@ -962,7 +966,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     {
         var sender_handshaken = false,
             receiver_handshaken = false,
-            receiver_ended = true;
+            receiver_ended = false;
 
         sender.on('handshake', function ()
         {
@@ -975,6 +979,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             {
                 return;
             }
+
+            expect(duplex._end_pending).to.equal(false);
 
             duplex.on('handshake', function ()
             {
@@ -989,14 +995,22 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 this.end();
             });
 
+            process.nextTick(function ()
+            {
+                expect(duplex._end_pending).to.equal(true);
+                expect(sender_handshaken).to.equal(false);
+                expect(receiver_handshaken).to.equal(false);
+                expect(receiver_ended).to.equal(false);
+                sender._send_handshake();
+            });
         });
 
         sender.on('readable', drain);
 
         sender.on('end', function ()
         {
-            expect(sender_handshaken).to.equal(false);
-            expect(receiver_handshaken).to.equal(false);
+            expect(sender_handshaken).to.equal(true);
+            expect(receiver_handshaken).to.equal(true);
             expect(receiver_ended).to.equal(true);
             cb();
         });
@@ -1284,6 +1298,26 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         sender._mux._out_stream.write(buf);
     }
 
+    function short_pre_handshake_message(sender, receiver, cb)
+    {
+        var called = false, buf;
+
+        receiver._mux.on('error', function (err)
+        {
+            expect(err.message).to.equal('short buffer length 5 < 9');
+            if (!called)
+            {
+                called = true;
+                cb();
+            }
+        });
+
+        buf = make_buffer(sender, 5);
+        buf.writeUInt8(5, 0, true); // TYPE_PRE_HANDSHAKE
+        buf.writeUInt32BE(sender._chan, 1, true);
+        sender._mux._out_stream.write(buf);
+    }
+
     function not_parse_handshake_data(sender, receiver, cb)
     {
         var sender_called = false, receiver_called = false;
@@ -1391,6 +1425,19 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
               null,
               true);
 
+        calln(new WithOptions('should emit an error if pre-handshake message length too short',
+                              {
+                                  peer_multiplex_options: {
+                                      _delay_handshake: true
+                                  }
+                              },
+                              {
+                                  _delay_handshake: true
+                              }),
+              short_pre_handshake_message,
+              null,
+              true);
+
         calln('should emit an error if status message length too short',
               short_status_message);
 
@@ -1425,7 +1472,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
               error_on_mux,
               1);
 
-        calln(new WithOptions('should be able to end before handshaken',
+        calln(new WithOptions('should not end before handshaken',
                               null,
                               {
                                   _delay_handshake: true

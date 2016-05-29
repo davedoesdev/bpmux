@@ -271,7 +271,7 @@ describe('inline stream', function ()
         });
     });
 
-    it.only('should support ending stream before sending delayed handshake',
+    it('should support ending stream before sending delayed handshake',
     function (cb)
     {
         rmux.on('handshake', function (duplex, hsdata, delay)
@@ -307,6 +307,44 @@ describe('inline stream', function ()
         });
 
         lmux.multiplex().end();
+    });
+
+    it('should support ending stream (with data) before sending delayed handshake',
+    function (cb)
+    {
+        rmux.on('handshake', function (duplex, hsdata, delay)
+        {
+            expect(hsdata.length).to.equal(0);
+
+            duplex.end();
+
+            var handshake = delay(),
+                bufs = [];
+
+            duplex.on('readable', function ()
+            {
+                while (true)
+                {
+                    var data = this.read();
+                    if (!data) { return; }
+                    bufs.push(data);
+                }
+            });
+
+            duplex.on('end', function ()
+            {
+                expect(Buffer.concat(bufs).toString()).to.equal('foo');
+                handshake();
+            });
+        });
+
+        lmux.on('handshake', function (duplex, hsdata, delay)
+        {
+            expect(delay).to.equal(null);
+            cb();
+        });
+
+        lmux.multiplex().end('foo');
     });
 });
 

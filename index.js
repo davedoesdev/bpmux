@@ -250,7 +250,8 @@ var util = require('util'),
     TYPE_HANDSHAKE = 1,
     TYPE_STATUS = 2,
     TYPE_FINISHED_STATUS = 3,
-    TYPE_DATA = 4;
+    TYPE_DATA = 4,
+    TYPE_PRE_HANDSHAKE = 5;
 
 function BPDuplex(options, mux, chan)
 {
@@ -272,6 +273,7 @@ function BPDuplex(options, mux, chan)
     this._removed = false;
     this._handshake_sent = false;
     this._handshake_received = false;
+    this._end_pending = false;
 
     this.on('finish', function ()
     {
@@ -587,14 +589,25 @@ BPMux.prototype._process_header = function (buf)
     switch (type)
     {
         case TYPE_END:
-            duplex._ended = true;
+            duplex._end_pending = true;
             break;
 
-        case TYPE_HANDSHAKE:
+        case TYPE_PRE_HANDSHAKE:
             if (!this._check_buffer(buf, 9)) { return; }
             free = buf.readUInt32BE(5, true);
             duplex._remote_free = duplex._max_write_size > 0 ?
                     Math.min(free, duplex._max_write_size) : free;
+            this._send();
+            break;
+
+        case TYPE_HANDSHAKE:
+            if (!this._check_buffer(buf, 9)) { return; }
+            if (duplex._seq === 0)
+            {
+                free = buf.readUInt32BE(5, true);
+                duplex._remote_free = duplex._max_write_size > 0 ?
+                        Math.min(free, duplex._max_write_size) : free;
+            }
             duplex._handshake_received = true;
             handshake_data = this._parse_handshake_data ?
                     this._parse_handshake_data(buf.slice(9)) :
@@ -602,15 +615,22 @@ BPMux.prototype._process_header = function (buf)
             dhs = duplex._handshake_sent ? null : delay_handshake;
             this.emit('handshake', duplex, handshake_data, dhs);
             duplex.emit('handshake', handshake_data, dhs);
-            if (!handshake_delayed)
+            if (handshake_delayed)
+            {
+                this._send_handshake(duplex);
+            }
+            else
             {
                 duplex._send_handshake();
             }
-            if (duplex._ended)
+            if (duplex._end_pending)
             {
+                duplex._ended = true;
                 duplex._check_remove();
                 duplex.push(null);
+                duplex._end_pending = false;
             }
+            this._send();
             break;
 
         case TYPE_FINISHED_STATUS:
@@ -626,6 +646,7 @@ BPMux.prototype._process_header = function (buf)
 BPMux.prototype._remove = function (duplex)
 {
     delete this._duplexes[duplex._chan];
+    duplex._removed = true;
 };
 
 BPMux.prototype._send_end = function (duplex)
@@ -645,14 +666,24 @@ BPMux.prototype._send_handshake = function (duplex, handshake_data)
     if (this._finished) { return; }
     if (duplex._handshake_sent) { return this._send(); }
     
-    var buf = new Buffer(1 + 4 + 4 + handshake_data.length);
+    var buf, size = 1 + 4 + 4;
 
-    buf.writeUInt8(TYPE_HANDSHAKE, 0, true);
+    if (handshake_data)
+    {
+        size += handshake_data.length;
+    }
+
+    buf = new Buffer(size);
+
+    buf.writeUInt8(handshake_data ? TYPE_HANDSHAKE : TYPE_PRE_HANDSHAKE, 0, true);
     buf.writeUInt32BE(duplex._chan, 1, true);
     buf.writeUInt32BE(Math.max(duplex._readableState.highWaterMark - duplex._readableState.length, 0), 5, true);
-    handshake_data.copy(buf, 9);
 
-    duplex._handshake_sent = true;
+    if (handshake_data)
+    {
+        handshake_data.copy(buf, 9);
+        duplex._handshake_sent = true;
+    }
 
     this._out_stream.write(buf);
 
