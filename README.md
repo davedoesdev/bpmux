@@ -243,6 +243,7 @@ grunt lint
 - <a name="toc_bpmuxprototypemultiplexoptions"></a><a name="toc_bpmuxprototype"></a>[BPMux.prototype.multiplex](#bpmuxprototypemultiplexoptions)
 - <a name="toc_bpmuxeventspeer_multiplexduplex"></a><a name="toc_bpmuxevents"></a>[BPMux.events.peer_multiplex](#bpmuxeventspeer_multiplexduplex)
 - <a name="toc_bpmuxeventshandshakeduplex-handshake_data-delay_handshake"></a>[BPMux.events.handshake](#bpmuxeventshandshakeduplex-handshake_data-delay_handshake)
+- <a name="toc_bpmuxeventshandshake_sentduplex-complete"></a>[BPMux.events.handshake_sent](#bpmuxeventshandshake_sentduplex-complete)
 
 ## BPMux(carrrier, [options])
 
@@ -286,7 +287,7 @@ grunt lint
 
 **Return:**
 
-`{Duplex}` The new `Duplex` which is multiplexed over the carrier.
+`{Duplex}` The new `Duplex` which is multiplexed over the carrier. This supports back-pressure using the stream [`readable`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_event_readable) event and [`write`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_writable_write_chunk_encoding_callback) method.
 
 **Throws:**
 
@@ -323,6 +324,19 @@ A `BPMux` object emits a `handshake` event when it receives a handshake message 
 - `{Object} handshake_data` Application-specific data which the peer sent along with the handshake message. If you specified a `parse_handshake_data` function in the `BPMux` [constructor](#bpmuxcarrrier-options) then `handshake_data` will be the return value from calling that function. 
 - `{Function | null} [delay_handshake]` This parameter will be `null` in case 2 (your application previously created `duplex`). Otherwise (case 1), this parameter will be a function. By default, the `BPMux` object replies to the peer's handshake message as soon as your event handler returns and doesn't attach any application-specific handshake data. If you wish to delay the handshake message or provide handshake data, call `delay_handshake`. It returns another function which you can call at any time to send the handshake message. The returned function takes a single argument: 
   - `{Buffer} [handshake_data]` Application-specific handshake data to attach to the handshake message sent to the peer. Defaults to a zero-length `Buffer`.
+
+<sub>Go: [TOC](#tableofcontents) | [BPMux.events](#toc_bpmuxevents)</sub>
+
+## BPMux.events.handshake_sent(duplex, complete)
+
+> `handshake_sent` event
+
+A `BPMux` object emits a `handshake_sent` event after it sends a handshake message to its peer on the carrier stream.
+
+**Parameters:**
+
+- `{Duplex} duplex` The multiplexed stream for which a handshake has been sent. **Please note that a `handshake_sent` event is also emitted on `duplex` immediately after `BPMux`'s `handshake` event finishes processing**. `duplex`'s `handshake_sent` event is passed the same `complete` parameter described below. 
+- `{Boolean} complete` Whether the handshake message was completely sent (`true`) or the carrier stream buffered it (`false`). You can use this to apply back-pressure to stream multiplexing. For example, if `complete` is `false` then you could avoid calling [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) until the carrier stream has emitted a [`drain`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_event_drain) event.
 
 <sub>Go: [TOC](#tableofcontents) | [BPMux.events](#toc_bpmuxevents)</sub>
 

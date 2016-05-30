@@ -346,5 +346,81 @@ describe('inline stream', function ()
 
         lmux.multiplex().end('foo');
     });
+
+    it('should emit handshake_sent event', function (cb)
+    {
+        var lcomplete, lcomplete2, rcomplete, rcomplete2;
+
+        function check()
+        {
+            if (lcomplete && lcomplete2 && rcomplete && rcomplete2)
+            {
+                cb();
+            }
+        }
+
+        rmux.on('handshake', function (duplex)
+        {
+            duplex.on('handshake_sent', function (complete)
+            {
+                rcomplete = complete;
+                check();
+            });
+        });
+
+        rmux.on('handshake_sent', function (duplex, complete)
+        {
+            rcomplete2 = complete;
+            check();
+        });
+
+        lmux.on('handshake_sent', function (duplex, complete)
+        {
+            lcomplete2 = complete;
+            check();
+        });
+
+        lmux.multiplex().on('handshake_sent', function (complete)
+        {
+            lcomplete = complete;
+            check();
+        });
+    });
+
+    it('should support backpressure on handshakes', function (cb)
+    {
+        this.timeout(2 * 60 * 1000);
+
+        left._write = function ()
+        {
+        };
+
+        var count_complete = 0,
+            count_incomplete = 0;
+
+        function sent(complete)
+        {
+            if (complete)
+            {
+                count_complete += 1;
+            }
+            else
+            {
+                count_incomplete += 1;
+            }
+            if ((count_complete + count_incomplete) === 4343)
+            {
+                expect(count_complete).to.equal(4342);
+                expect(count_incomplete).to.equal(1);
+                cb();
+            }
+        }
+
+        // number will change if change handshake buffer size
+        for (var i = 0; i < 4343; i += 1)
+        {
+            lmux.multiplex().on('handshake_sent', sent);
+        }
+    });
 });
 

@@ -685,7 +685,13 @@ BPMux.prototype._send_handshake = function (duplex, handshake_data)
         duplex._handshake_sent = true;
     }
 
-    this._out_stream.write(buf);
+    var r = this._out_stream.write(buf);
+
+    if (handshake_data)
+    {
+        this.emit('handshake_sent', duplex, r);
+        duplex.emit('handshake_sent', r);
+    }
 
     this._send();
 };
@@ -866,7 +872,7 @@ Multiplex a new `stream.Duplex` over the carrier.
 
   - `{Integer} [channel]` Unique number for the new stream. `BPMux` identifies each multiplexed stream by giving it a unique number, which it allocates automatically. If you want to do the allocation yourself, specify a channel number here. It's very unlikely you'll need to do this but the option is there. `Duplex` objects managed by `BPMux` expose a `get_channel` method to retrieve their channel number. Defaults to automatic allocation.
   
-@return {Duplex} The new `Duplex` which is multiplexed over the carrier.
+@return {Duplex} The new `Duplex` which is multiplexed over the carrier. This supports back-pressure using the stream [`readable`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_event_readable) event and [`write`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_writable_write_chunk_encoding_callback) method.
 
 @throws {Error} If there are no channel numbers left to allocate to the new stream.
 */

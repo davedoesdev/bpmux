@@ -27,3 +27,14 @@ A `BPMux` object emits a `handshake` event when it receives a handshake message 
   - `{Buffer} [handshake_data]` Application-specific handshake data to attach to the handshake message sent to the peer. Defaults to a zero-length `Buffer`.
 */
 BPMux.events.handshake = function (duplex, handshake_data, delay_handshake) { return undefined; };
+
+/**
+`handshake_sent` event
+
+A `BPMux` object emits a `handshake_sent` event after it sends a handshake message to its peer on the carrier stream.
+
+@param {Duplex} duplex The multiplexed stream for which a handshake has been sent. **Please note that a `handshake_sent` event is also emitted on `duplex` immediately after `BPMux`'s `handshake` event finishes processing**. `duplex`'s `handshake_sent` event is passed the same `complete` parameter described below.
+
+@param {Boolean} complete Whether the handshake message was completely sent (`true`) or the carrier stream buffered it (`false`). You can use this to apply back-pressure to stream multiplexing. For example, if `complete` is `false` then you could avoid calling [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) until the carrier stream has emitted a [`drain`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_event_drain) event.
+*/
+BPMux.events.handshake_sent = function (duplex, complete) { return undefined; };
