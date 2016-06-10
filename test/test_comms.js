@@ -366,7 +366,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
     function large_buffer(sender, receiver, cb)
     {
-        var buf = new Buffer(32 * 1024), bufs = [], count = 0;
+        var buf = make_buffer(sender, 32 * 1024), bufs = [], count = 0;
         buf.fill('a');
 
         receiver.on('readable', function ()
@@ -382,7 +382,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 count += data.length;
                 if (count === buf.length)
                 {
-                    expect(Buffer.concat(bufs).toString()).to.equal(buf.toString());
+                    expect(buffer_concat(receiver, bufs).toString()).to.equal(buf.toString());
                     cb();
                 }
                 else if (count > buf.length)
