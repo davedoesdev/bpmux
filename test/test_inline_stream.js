@@ -422,5 +422,71 @@ describe('inline stream', function ()
             lmux.multiplex().on('handshake_sent', sent);
         }
     });
+
+    it('should support sending large buffers', function (cb)
+    {
+        var buf = new Buffer(32 * 1024);
+        buf.fill('a');
+
+        rmux.once('handshake', function (duplex)
+        {
+            var bufs = [];
+
+            duplex.on('readable', function ()
+            {
+                while (true)
+                {
+                    var data = this.read();
+                    if (data === null)
+                    {
+                        break;
+                    }
+                    bufs.push(data);
+                }
+            });
+
+            duplex.on('end', function ()
+            {
+                expect(Buffer.concat(bufs).toString()).to.equal(buf.toString());
+                cb();
+            });
+        });
+
+        lmux.multiplex().end(buf);
+    });
+
+    it('should support sending large buffers with delayed handshake',
+    function (cb)
+    {
+        var buf = new Buffer(32 * 1024);
+        buf.fill('a');
+
+        rmux.on('handshake', function (duplex, hsdata, delay)
+        {
+            delay();
+
+            var bufs = [];
+
+            duplex.on('readable', function ()
+            {
+                while (true)
+                {
+                    var data = this.read();
+                    if (data === null)
+                    {
+                        break;
+                    }
+                    bufs.push(data);
+                }
+            });
+
+            duplex.on('end', function ()
+            {
+                expect(Buffer.concat(bufs).toString()).to.equal(buf.toString());                cb();
+            });
+        });
+
+        lmux.multiplex().end(buf);
+    });
 });
 

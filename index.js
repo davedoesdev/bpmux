@@ -709,7 +709,6 @@ BPMux.prototype._send_status = function (duplex)
 
     if (this._finished ||
         (duplex._remote_seq === undefined) ||
-        !duplex._handshake_sent ||
         (this._reading_duplex === duplex))
     {
         return;
@@ -726,8 +725,23 @@ BPMux.prototype._send_status = function (duplex)
         return;
     }
 
+    var type;
+
+    if (!duplex._handshake_sent)
+    {
+        type = TYPE_PRE_HANDSHAKE;
+    }
+    else if (duplex._finished)
+    {
+        type = TYPE_FINISHED_STATUS;
+    }
+    else
+    {
+        type = TYPE_STATUS;
+    }
+
     buf = new Buffer(1 + 4 + 4 + duplex._remote_seq.length);
-    buf.writeUInt8(duplex._finished ? TYPE_FINISHED_STATUS : TYPE_STATUS, 0, true);
+    buf.writeUInt8(type, 0, true);
     buf.writeUInt32BE(duplex._chan, 1, true);
     buf.writeUInt32BE(free, 5, true);
     duplex._remote_seq.copy(buf, 9);

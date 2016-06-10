@@ -364,6 +364,37 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         send();
     }
 
+    function large_buffer(sender, receiver, cb)
+    {
+        var buf = new Buffer(32 * 1024), bufs = [], count = 0;
+        buf.fill('a');
+
+        receiver.on('readable', function ()
+        {
+            while (true)
+            {
+                var data = this.read();
+                if (data === null)
+                {
+                    break;
+                }
+                bufs.push(data);
+                count += data.length;
+                if (count === buf.length)
+                {
+                    expect(Buffer.concat(bufs).toString()).to.equal(buf.toString());
+                    cb();
+                }
+                else if (count > buf.length)
+                {
+                    cb(new Error('too much data'));
+                }
+            }
+        });
+
+        sender.write(buf);
+    }
+
     function delay_status(sender, receiver, cb)
     {
         var read_count = 0,
@@ -1490,6 +1521,9 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         calln('should write multiple bytes to multiplexed streams',
               multi_byte);
+
+        calln('should write large buffer to multiplexed streams',
+              large_buffer);
 
         calln('should be able to delay status messages',
               delay_status);
