@@ -20,7 +20,8 @@
   "scripts": {
     "test": "grunt lint test-fast",
     "travis-test-coverage": "grunt lint coverage coveralls",
-    "travis-test-browser": "grunt test-browser"
+    "travis-test-browser": "grunt test-browser",
+    "travis-test-inline": "grunt test-inline"
   },
   "directories": {
     "test": "test"
