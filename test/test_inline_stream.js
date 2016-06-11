@@ -475,6 +475,7 @@ describe('inline stream', function ()
                     var data = this.read();
                     if (data === null)
                     {
+                    console.log("BREAK");
                         break;
                     }
                     bufs.push(data);

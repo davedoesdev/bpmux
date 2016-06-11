@@ -481,6 +481,7 @@ function BPMux(carrier, options)
                     }
                     else
                     {
+                    console.log("PUSHING", data.length);
                         duplex.push(data);
                     }
                 }
@@ -581,6 +582,7 @@ BPMux.prototype._process_header = function (buf)
 
             case TYPE_DATA:
                 duplex._remote_seq = buf.slice(5);
+                console.log("DATA", duplex._remote_seq);
                 this._reading_duplex = duplex;
                 break;
 
@@ -727,7 +729,7 @@ console.log("SEND STATUS");
         // we don't care about contents here, just if it's changed
         (duplex._prev_status.seq === duplex._remote_seq))
     {
-    console.log("NOT SENDING2");
+    console.log("NOT SENDING2", duplex._prev_status.seq, duplex._remote_seq);
         return;
     }
 
@@ -756,6 +758,8 @@ console.log("SEND STATUS");
         free: free,
         seq: duplex._remote_seq
     };
+
+    console.log("SET PREV", duplex._prev_status.seq);
 
     this._out_stream.write(buf);
 };
