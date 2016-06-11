@@ -60,12 +60,15 @@ LeftDuplex.prototype._read = function ()
 
 LeftDuplex.prototype._write = function (chunk, encoding, cb)
 {
+console.log("left is writing", chunk.length);
     if (this.right.push(chunk, encoding))
     {
+    console.log("push suceeded");
         cb();
     }
     else
     {
+    console.log("push failed");
         right._cb = cb;
     }
 };
