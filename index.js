@@ -701,6 +701,7 @@ BPMux.prototype._send_handshake = function (duplex, handshake_data)
 
 BPMux.prototype._send_status = function (duplex)
 {
+console.log("SEND STATUS");
     // Note: Status messages are sent regardless of remote_free
     // (if the remote peer isn't doing anything it could never be sent and it
     // could be waiting for a status update). 
@@ -714,6 +715,7 @@ BPMux.prototype._send_status = function (duplex)
         (duplex._remote_seq === undefined) ||
         (this._reading_duplex === duplex))
     {
+    console.log("NOT SENDING1", this._finished, duplex._remote_seq);
         return;
     }
 
@@ -725,6 +727,7 @@ BPMux.prototype._send_status = function (duplex)
         // we don't care about contents here, just if it's changed
         (duplex._prev_status.seq === duplex._remote_seq))
     {
+    console.log("NOT SENDING2");
         return;
     }
 
