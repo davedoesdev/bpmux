@@ -31,7 +31,9 @@ module.exports = function (grunt)
                 }
             },
 
-            examples: 'test/test_examples.js'
+            examples: 'test/test_examples.js',
+
+            inline: 'test/test_inline_stream.js'
         },
 
         apidox: {
@@ -86,6 +88,7 @@ module.exports = function (grunt)
     grunt.registerTask('lint', 'jshint');
     grunt.registerTask('test', 'mochaTest:default');
     grunt.registerTask('test-fast', ['env:fast', 'mochaTest:default']);
+    grunt.registerTask('test-inline', 'mochaTest:inline');
     grunt.registerTask('test-examples', [ 'shell:bundle_example',
                                           'mochaTest:examples' ]);
     grunt.registerTask('test-browser', [ 'save-primus',

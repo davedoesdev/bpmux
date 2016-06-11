@@ -6,6 +6,7 @@ node_js:
   - 4
   - 6
 env:
+  - TARGET=test-inline
   - TARGET=test-coverage
   - TARGET=test-browser
 script:
