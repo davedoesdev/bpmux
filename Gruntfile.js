@@ -44,7 +44,7 @@ module.exports = function (grunt)
         shell: {
             cover: {
                 command: './node_modules/.bin/istanbul cover -x Gruntfile.js ./node_modules/.bin/grunt -- test-fast',
-                maxBuffer: 10000 * 1024
+                maxBuffer: 1000000 * 1024
             },
 
             check_cover: {
