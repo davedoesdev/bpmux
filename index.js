@@ -547,6 +547,8 @@ BPMux.prototype._process_header = function (buf)
 
         duplex._remote_free = seq + free - duplex._seq;
 
+        console.log("HANDLING STATUS", free, seq, duplex._remote_free);
+
         if (duplex._seq < seq)
         {
             duplex._remote_free -= max_seq;
