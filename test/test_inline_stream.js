@@ -458,6 +458,8 @@ describe('inline stream', function ()
     it('should support sending large buffers with delayed handshake',
     function (cb)
     {
+        this.timeout(5000);
+
     console.log("HERE1");
         var buf = new Buffer(100 * 1024);
         buf.fill('a');

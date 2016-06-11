@@ -452,6 +452,7 @@ function BPMux(carrier, options)
 
     this._in_stream.on('readable', function ()
     {
+    console.log("READABLE");
         var data, duplex;
 
         while (true)
@@ -461,11 +462,13 @@ function BPMux(carrier, options)
 
             if (data === null)
             {
+                console.log("DATA IS NULL");
                 break;
             }
 
             if (duplex)
             {
+            console.log("HAVE A DUPLEX");
                 if (data.frameEnd)
                 {
                     ths._reading_duplex = null;
