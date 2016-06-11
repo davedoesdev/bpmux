@@ -458,6 +458,7 @@ describe('inline stream', function ()
     it('should support sending large buffers with delayed handshake',
     function (cb)
     {
+    console.log("HERE1");
         var buf = new Buffer(100 * 1024);
         buf.fill('a');
 
@@ -477,11 +478,13 @@ describe('inline stream', function ()
                         break;
                     }
                     bufs.push(data);
+                    console.log("READ", Buffer.concat(bufs).length);
                 }
             });
 
             duplex.on('end', function ()
             {
+            console.log("END");
                 expect(Buffer.concat(bufs).toString()).to.equal(buf.toString());                cb();
             });
         });
