@@ -518,7 +518,8 @@ BPMux.prototype._process_header = function (buf)
 {
     if (!this._check_buffer(buf, 5)) { return; }
 
-    var type = buf.readUInt8(0, true),
+    var ths = this,
+        type = buf.readUInt8(0, true),
         chan = buf.readUInt32BE(1, true),
         duplex = this._duplexes[chan],
         handshake_data,
@@ -534,6 +535,24 @@ BPMux.prototype._process_header = function (buf)
         {
             duplex._send_handshake(handshake_data);
         };
+    }
+
+    function handle_status()
+    {
+        free = buf.readUInt32BE(5, true);
+        seq = buf.length === 13 ? buf.readUInt32BE(9, true) : 0;
+
+        free = duplex._max_write_size > 0 ?
+                Math.min(free, duplex._max_write_size) : free;
+
+        duplex._remote_free = seq + free - duplex._seq;
+
+        if (duplex._seq < seq)
+        {
+            duplex._remote_free -= max_seq;
+        }
+
+        ths._send();
     }
 
     if ((type !== TYPE_FINISHED_STATUS) && !duplex)
@@ -555,22 +574,7 @@ BPMux.prototype._process_header = function (buf)
             case TYPE_STATUS:
             case TYPE_FINISHED_STATUS:
                 if (!this._check_buffer(buf, 13)) { return; }
-                
-                free = buf.readUInt32BE(5, true);
-                seq = buf.readUInt32BE(9, true);
-
-                free = duplex._max_write_size > 0 ?
-                        Math.min(free, duplex._max_write_size) : free;
-
-                duplex._remote_free = seq + free - duplex._seq;
-
-                if (duplex._seq < seq)
-                {
-                    duplex._remote_free -= max_seq;
-                }
-
-                this._send();
-
+                handle_status();
                 break;
 
             case TYPE_DATA:
@@ -594,10 +598,7 @@ BPMux.prototype._process_header = function (buf)
 
         case TYPE_PRE_HANDSHAKE:
             if (!this._check_buffer(buf, 9)) { return; }
-            free = buf.readUInt32BE(5, true);
-            duplex._remote_free = duplex._max_write_size > 0 ?
-                    Math.min(free, duplex._max_write_size) : free;
-            this._send();
+            handle_status();
             break;
 
         case TYPE_HANDSHAKE:

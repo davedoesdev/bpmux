@@ -458,7 +458,7 @@ describe('inline stream', function ()
     it('should support sending large buffers with delayed handshake',
     function (cb)
     {
-        var buf = new Buffer(32 * 1024);
+        var buf = new Buffer(100 * 1024);
         buf.fill('a');
 
         rmux.on('handshake', function (duplex, hsdata, delay)
