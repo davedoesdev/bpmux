@@ -37,7 +37,7 @@ RightDuplex.prototype._write = function (chunk, encoding, cb)
     }
     else
     {
-        this._cb = cb;
+        left._cb = cb;
     }
 };
 
@@ -66,7 +66,7 @@ LeftDuplex.prototype._write = function (chunk, encoding, cb)
     }
     else
     {
-        this._cb = cb;
+        right._cb = cb;
     }
 };
 
