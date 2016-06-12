@@ -16,6 +16,10 @@ function RightDuplex(left)
 {
     Duplex.call(this);
     this.left = left;
+    this.on('finish', function ()
+    {
+        left.push(null);
+    });
 }
 
 util.inherits(RightDuplex, Duplex);
@@ -24,8 +28,9 @@ RightDuplex.prototype._read = function ()
 {
     if (this._cb)
     {
-        this._cb();
+        var cb = this._cb;
         this._cb = null;
+        cb();
     }
 };
 
@@ -37,7 +42,7 @@ RightDuplex.prototype._write = function (chunk, encoding, cb)
     }
     else
     {
-        left._cb = cb;
+        this.left._cb = cb;
     }
 };
 
@@ -45,6 +50,10 @@ function LeftDuplex()
 {
     Duplex.call(this);
     this.right = new RightDuplex(this);
+    this.on('finish', function ()
+    {
+        this.right.push(null);
+    }.bind(this));
 }
 
 util.inherits(LeftDuplex, Duplex);
@@ -53,23 +62,21 @@ LeftDuplex.prototype._read = function ()
 {
     if (this._cb)
     {
-        this._cb();
+        var cb = this._cb;
         this._cb = null;
+        cb();
     }
 };
 
 LeftDuplex.prototype._write = function (chunk, encoding, cb)
 {
-console.log("left is writing", chunk.length);
     if (this.right.push(chunk, encoding))
     {
-    console.log("push suceeded");
         cb();
     }
     else
     {
-    console.log("push failed");
-        right._cb = cb;
+        this.right._cb = cb;
     }
 };
 

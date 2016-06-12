@@ -812,8 +812,8 @@ BPMux.prototype.__send = function ()
         buf.writeUInt32BE(info.duplex._chan, 1, true);
         buf.writeUInt32BE(info.duplex._seq, 5, true);
 
-        console.log("WRITTEN BUF", ths._out_stream.write(buf));
-        console.log("WRITTEN BUF2", ths._out_stream.write(buf2), buf2.length);
+        ths._out_stream.write(buf);
+        ths._out_stream.write(buf2);
         
         info.duplex._remote_free -= size;
         info.duplex._index += size;
