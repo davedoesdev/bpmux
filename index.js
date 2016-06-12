@@ -452,7 +452,6 @@ function BPMux(carrier, options)
 
     this._in_stream.on('readable', function ()
     {
-    console.log("READABLE");
         var data, duplex;
 
         while (true)
@@ -462,13 +461,11 @@ function BPMux(carrier, options)
 
             if (data === null)
             {
-                console.log("DATA IS NULL");
                 break;
             }
 
             if (duplex)
             {
-            console.log("HAVE A DUPLEX");
                 if (data.frameEnd)
                 {
                     ths._reading_duplex = null;
@@ -484,7 +481,6 @@ function BPMux(carrier, options)
                     }
                     else
                     {
-                    console.log("PUSHING", data.length);
                         duplex.push(data);
                     }
                 }
@@ -551,8 +547,6 @@ BPMux.prototype._process_header = function (buf)
 
         duplex._remote_free = seq + free - duplex._seq;
 
-        console.log("HANDLING STATUS", free, seq, duplex._remote_free);
-
         if (duplex._seq < seq)
         {
             duplex._remote_free -= max_seq;
@@ -585,7 +579,6 @@ BPMux.prototype._process_header = function (buf)
 
             case TYPE_DATA:
                 duplex._remote_seq = buf.slice(5);
-                console.log("DATA", duplex._remote_seq);
                 this._reading_duplex = duplex;
                 break;
 
@@ -706,7 +699,6 @@ BPMux.prototype._send_handshake = function (duplex, handshake_data)
 
 BPMux.prototype._send_status = function (duplex)
 {
-console.log("SEND STATUS");
     // Note: Status messages are sent regardless of remote_free
     // (if the remote peer isn't doing anything it could never be sent and it
     // could be waiting for a status update). 
@@ -720,7 +712,6 @@ console.log("SEND STATUS");
         (duplex._remote_seq === undefined) ||
         (this._reading_duplex === duplex))
     {
-    console.log("NOT SENDING1", this._finished, duplex._remote_seq);
         return;
     }
 
@@ -732,7 +723,6 @@ console.log("SEND STATUS");
         // we don't care about contents here, just if it's changed
         (duplex._prev_status.seq === duplex._remote_seq))
     {
-    console.log("NOT SENDING2", duplex._prev_status.seq, duplex._remote_seq);
         return;
     }
 
@@ -761,8 +751,6 @@ console.log("SEND STATUS");
         free: free,
         seq: duplex._remote_seq
     };
-
-    console.log("SET PREV", duplex._prev_status.seq);
 
     this._out_stream.write(buf);
 };
