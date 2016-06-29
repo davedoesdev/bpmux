@@ -465,38 +465,42 @@ describe('inline stream', function ()
         lmux.multiplex().end(buf);
     });
 
-    it('should support sending large buffers with delayed handshake',
-    function (cb)
+    // https://github.com/nodejs/node/pull/7292 isn't on 0.12
+    if (parseFloat(process.versions.node) > 0.12)
     {
-        var buf = new Buffer(100 * 1024);
-        buf.fill('a');
-
-        rmux.on('handshake', function (duplex, hsdata, delay)
+        it('should support sending large buffers with delayed handshake',
+        function (cb)
         {
-            delay();
+            var buf = new Buffer(100 * 1024);
+            buf.fill('a');
 
-            var bufs = [];
-
-            duplex.on('readable', function ()
+            rmux.on('handshake', function (duplex, hsdata, delay)
             {
-                while (true)
+                delay();
+
+                var bufs = [];
+
+                duplex.on('readable', function ()
                 {
-                    var data = this.read();
-                    if (data === null)
+                    while (true)
                     {
-                        break;
+                        var data = this.read();
+                        if (data === null)
+                        {
+                            break;
+                        }
+                        bufs.push(data);
                     }
-                    bufs.push(data);
-                }
+                });
+
+                duplex.on('end', function ()
+                {
+                    expect(Buffer.concat(bufs).toString()).to.equal(buf.toString());                cb();
+                });
             });
 
-            duplex.on('end', function ()
-            {
-                expect(Buffer.concat(bufs).toString()).to.equal(buf.toString());                cb();
-            });
+            lmux.multiplex().end(buf);
         });
-
-        lmux.multiplex().end(buf);
-    });
+    }
 });
 
