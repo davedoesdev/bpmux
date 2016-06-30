@@ -244,6 +244,8 @@ grunt lint
 - <a name="toc_bpmuxeventspeer_multiplexduplex"></a><a name="toc_bpmuxevents"></a>[BPMux.events.peer_multiplex](#bpmuxeventspeer_multiplexduplex)
 - <a name="toc_bpmuxeventshandshakeduplex-handshake_data-delay_handshake"></a>[BPMux.events.handshake](#bpmuxeventshandshakeduplex-handshake_data-delay_handshake)
 - <a name="toc_bpmuxeventshandshake_sentduplex-complete"></a>[BPMux.events.handshake_sent](#bpmuxeventshandshake_sentduplex-complete)
+- <a name="toc_bpmuxeventsend"></a>[BPMux.events.end](#bpmuxeventsend)
+- <a name="toc_bpmuxeventsfinish"></a>[BPMux.events.finish](#bpmuxeventsfinish)
 
 ## BPMux(carrrier, [options])
 
@@ -337,6 +339,24 @@ A `BPMux` object emits a `handshake_sent` event after it sends a handshake messa
 
 - `{Duplex} duplex` The multiplexed stream for which a handshake has been sent. **Please note that a `handshake_sent` event is also emitted on `duplex` immediately after `BPMux`'s `handshake` event finishes processing**. `duplex`'s `handshake_sent` event is passed the same `complete` parameter described below. 
 - `{Boolean} complete` Whether the handshake message was completely sent (`true`) or the carrier stream buffered it (`false`). You can use this to apply back-pressure to stream multiplexing. For example, if `complete` is `false` then you could avoid calling [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) until the carrier stream has emitted a [`drain`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_event_drain) event.
+
+<sub>Go: [TOC](#tableofcontents) | [BPMux.events](#toc_bpmuxevents)</sub>
+
+## BPMux.events.end()
+
+> `end` event
+
+A `BPMux` object emits a `end` event after the carrier stream ends (will receive
+no more data).
+
+<sub>Go: [TOC](#tableofcontents) | [BPMux.events](#toc_bpmuxevents)</sub>
+
+## BPMux.events.finish()
+
+> `finish` event
+
+A `BPMux` object emits a `finish` event after the carrier stream finishes (won't
+write any more data).
 
 <sub>Go: [TOC](#tableofcontents) | [BPMux.events](#toc_bpmuxevents)</sub>
 

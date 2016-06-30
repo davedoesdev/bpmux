@@ -38,3 +38,19 @@ A `BPMux` object emits a `handshake_sent` event after it sends a handshake messa
 @param {Boolean} complete Whether the handshake message was completely sent (`true`) or the carrier stream buffered it (`false`). You can use this to apply back-pressure to stream multiplexing. For example, if `complete` is `false` then you could avoid calling [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) until the carrier stream has emitted a [`drain`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_event_drain) event.
 */
 BPMux.events.handshake_sent = function (duplex, complete) { return undefined; };
+
+/**
+`end` event
+
+A `BPMux` object emits a `end` event after the carrier stream ends (will receive
+no more data).
+*/
+BPMux.events.end = function () { return undefined; };
+
+/**
+`finish` event
+
+A `BPMux` object emits a `finish` event after the carrier stream finishes (won't
+write any more data).
+*/
+BPMux.events.finish = function () { return undefined; };

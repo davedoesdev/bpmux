@@ -416,6 +416,11 @@ function BPMux(carrier, options)
         });
     });
 
+    carrier.on('finish', function ()
+    {
+        ths.emit('finish');
+    });
+
     this._in_stream.on('end', function ()
     {
         ths._ended = true;
@@ -424,6 +429,8 @@ function BPMux(carrier, options)
         {
             ths._duplexes[chan].push(null);
         });
+
+        ths.emit('end');
     });
 
     function error(err)

@@ -502,5 +502,17 @@ describe('inline stream', function ()
             lmux.multiplex().end(buf);
         });
     }
+
+    it('should emit end event when carrier stream ends', function (cb)
+    {
+        rmux.on('end', cb);
+        left.end();
+    });
+
+    it('should emit finish event when carrier stream ends', function (cb)
+    {
+        lmux.on('finish', cb);
+        left.end();
+    });
 });
 
