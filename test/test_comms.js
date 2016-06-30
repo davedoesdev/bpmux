@@ -77,9 +77,9 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         {
             if (this._finished)
             {
-                expect(this._mux._duplexes[this._chan]).to.equal(undefined);
+                expect(this._mux.duplexes.has(this._chan)).to.equal(false);
                 this._mux._chan = this._chan;
-                expect(this._mux.multiplex({ _delay_handshake: true })._chan).to.equal(duplex._chan);
+                expect(this._mux.multiplex({ _delay_handshake: true })._chan).to.equal(this._chan);
             }
             ended += 1;
             if (check) { check(); }

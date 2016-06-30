@@ -10,7 +10,10 @@ module.exports = function (grunt)
     grunt.initConfig(
     {
         jshint: {
-            src: [ '*.js', 'test/*.js' ]
+            src: [ '*.js', 'test/*.js' ],
+            options: {
+                esversion: 6
+            }
         },
 
         env: {

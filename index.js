@@ -288,7 +288,7 @@ function BPDuplex(options, mux, chan)
         this._check_remove();
     });
 
-    mux._duplexes[chan] = this;
+    mux.duplexes.set(chan, this);
 }
 
 util.inherits(BPDuplex, Duplex);
@@ -366,7 +366,7 @@ function BPMux(carrier, options)
     options = options || {};
 
     this._max_duplexes = Math.pow(2, 31);
-    this._duplexes = {};
+    this.duplexes = new Map();
     this._chan = 0;
     this._chan_offset = options.high_channels ? this._max_duplexes : 0;
     this._finished = false;
@@ -410,10 +410,10 @@ function BPMux(carrier, options)
     {
         ths._finished = true;
 
-        Object.keys(ths._duplexes).forEach(function (chan)
+        for (var duplex of ths.duplexes.values())
         {
-            ths._duplexes[chan].end();
-        });
+            duplex.end();
+        }
     });
 
     carrier.on('finish', function ()
@@ -425,25 +425,23 @@ function BPMux(carrier, options)
     {
         ths._ended = true;
 
-        Object.keys(ths._duplexes).forEach(function (chan)
+        for (var duplex of ths.duplexes.values())
         {
-            ths._duplexes[chan].push(null);
-        });
+            duplex.push(null);
+        }
 
         ths.emit('end');
     });
 
     function error(err)
     {
-        Object.keys(ths._duplexes).forEach(function (chan)
+        for (var duplex of ths.duplexes.values())
         {
-            var duplex = ths._duplexes[chan];
-
             if (EventEmitter.listenerCount(duplex, 'error') > 0)
             {
                 duplex.emit('error', err);
             }
-        });
+        }
 
         ths.emit('error', err);
     }
@@ -528,7 +526,7 @@ BPMux.prototype._process_header = function (buf)
     var ths = this,
         type = buf.readUInt8(0, true),
         chan = buf.readUInt32BE(1, true),
-        duplex = this._duplexes[chan],
+        duplex = this.duplexes.get(chan),
         handshake_data,
         handshake_delayed = false,
         dhs,
@@ -653,7 +651,7 @@ BPMux.prototype._process_header = function (buf)
 
 BPMux.prototype._remove = function (duplex)
 {
-    delete this._duplexes[duplex._chan];
+    this.duplexes.delete(duplex._chan);
     duplex._removed = true;
 };
 
@@ -771,10 +769,8 @@ BPMux.prototype.__send = function ()
         return;
     }
 
-    function push_output(chan)
+    function push_output(duplex)
     {
-        var duplex = ths._duplexes[chan];
-
         if ((duplex._data === null) ||
             (duplex._remote_free <= 0) ||
             !duplex._handshake_sent)
@@ -836,7 +832,7 @@ BPMux.prototype.__send = function ()
             break;
         }
         
-        Object.keys(this._duplexes).forEach(push_output);
+        this.duplexes.forEach(push_output);
         
         n = output.length;
 
@@ -930,7 +926,7 @@ BPMux.prototype.multiplex = function (options)
     {
         next = (chan + 1) % this._max_duplexes;
 
-        if (this._duplexes[chan + this._chan_offset] === undefined)
+        if (!this.duplexes.has(chan + this._chan_offset))
         {
             this._chan = next;
             return done(chan + this._chan_offset);
