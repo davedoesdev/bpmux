@@ -265,6 +265,7 @@ function BPDuplex(options, mux, chan)
     this._check_read_overflow = options.check_read_overflow !== false;
     this._seq = 0;
     this._remote_free = 0;
+    this._set_remote_free = false;
     this._data = null;
     this._cb = null;
     this._index = 0;
@@ -557,6 +558,8 @@ BPMux.prototype._process_header = function (buf)
             duplex._remote_free -= max_seq;
         }
 
+        duplex._set_remote_free = true;
+
         ths._send();
     }
 
@@ -613,6 +616,7 @@ BPMux.prototype._process_header = function (buf)
                 free = buf.readUInt32BE(5, true);
                 duplex._remote_free = duplex._max_write_size > 0 ?
                         Math.min(free, duplex._max_write_size) : free;
+                duplex._set_remote_free = true;
             }
             duplex._handshake_received = true;
             handshake_data = this._parse_handshake_data ?
@@ -803,10 +807,16 @@ BPMux.prototype.__send = function ()
         buf.writeUInt32BE(info.duplex._chan, 1, true);
         buf.writeUInt32BE(info.duplex._seq, 5, true);
 
+        info.duplex._set_remote_free = false;
+
         ths._out_stream.write(buf);
         ths._out_stream.write(buf2);
-        
-        info.duplex._remote_free -= size;
+
+        if (!info.duplex._set_remote_free)
+        {
+            info.duplex._remote_free -= size;
+        }
+
         info.duplex._index += size;
 
         if (info.duplex._index === info.duplex._data.length)

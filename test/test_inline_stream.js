@@ -435,7 +435,7 @@ describe('inline stream', function ()
 
     it('should support sending large buffers', function (cb)
     {
-        var buf = new Buffer(32 * 1024);
+        var buf = new Buffer(128 * 1024);
         buf.fill('a');
 
         rmux.once('handshake', function (duplex)
