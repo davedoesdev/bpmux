@@ -435,6 +435,8 @@ describe('inline stream', function ()
 
     it('should support sending large buffers', function (cb)
     {
+        this.timeout(60 * 1000);
+
         var buf = new Buffer(128 * 1024);
         buf.fill('a');
 
