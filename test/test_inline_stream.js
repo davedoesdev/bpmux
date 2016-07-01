@@ -433,43 +433,41 @@ describe('inline stream', function ()
         }
     });
 
-    it('should support sending large buffers', function (cb)
-    {
-        this.timeout(60 * 1000);
-
-        var buf = new Buffer(128 * 1024);
-        buf.fill('a');
-
-        rmux.once('handshake', function (duplex)
-        {
-            var bufs = [];
-
-            duplex.on('readable', function ()
-            {
-                while (true)
-                {
-                    var data = this.read();
-                    if (data === null)
-                    {
-                        break;
-                    }
-                    bufs.push(data);
-                }
-            });
-
-            duplex.on('end', function ()
-            {
-                expect(Buffer.concat(bufs).toString()).to.equal(buf.toString());
-                cb();
-            });
-        });
-
-        lmux.multiplex().end(buf);
-    });
-
     // https://github.com/nodejs/node/pull/7292 isn't on 0.12
     if (parseFloat(process.versions.node) > 0.12)
     {
+        it('should support sending large buffers', function (cb)
+        {
+            var buf = new Buffer(128 * 1024);
+            buf.fill('a');
+
+            rmux.once('handshake', function (duplex)
+            {
+                var bufs = [];
+
+                duplex.on('readable', function ()
+                {
+                    while (true)
+                    {
+                        var data = this.read();
+                        if (data === null)
+                        {
+                            break;
+                        }
+                        bufs.push(data);
+                    }
+                });
+
+                duplex.on('end', function ()
+                {
+                    expect(Buffer.concat(bufs).toString()).to.equal(buf.toString());
+                    cb();
+                });
+            });
+
+            lmux.multiplex().end(buf);
+        });
+
         it('should support sending large buffers with delayed handshake',
         function (cb)
         {
