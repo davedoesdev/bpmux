@@ -377,7 +377,7 @@ function BPMux(carrier, options)
     this._peer_multiplex_options = options.peer_multiplex_options;
     this._parse_handshake_data = options.parse_handshake_data;
     this._coalesce_writes = options.coalesce_writes;
-    this._carrier = carrier;
+    this.carrier = carrier;
     this._sending = false;
     this._send_requested = false;
 
@@ -845,14 +845,14 @@ BPMux.prototype.__send = function ()
 
         if (this._coalesce_writes)
         {
-            this._carrier.cork();
+            this.carrier.cork();
         }
 
         output.forEach(write_output);
         
         if (this._coalesce_writes)
         {
-            this._carrier.uncork();
+            this.carrier.uncork();
         }
     }
 };

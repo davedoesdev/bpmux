@@ -710,7 +710,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         // Readable unpipes on error (_stream_readable.js, function onerror),
         // which means we'll never get EOF when cleaning up.
-        error_events = sender._mux._carrier._events.error;
+        error_events = sender._mux.carrier._events.error;
         if (error_events[0].name === 'onerror')
         {
             error_events.shift();
@@ -723,7 +723,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         sender._mux._in_stream.emit('error', err);
         sender._mux._out_stream.emit('error', err);
-        sender._mux._carrier.emit('error', err);
+        sender._mux.carrier.emit('error', err);
         sender.emit('error', err);
     }
     /*jslint unparam: false */
@@ -1060,7 +1060,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             cb();
         });
 
-        sender._mux._carrier.emit('error', err);
+        sender._mux.carrier.emit('error', err);
     }
     /*jslint unparam: false */
 
