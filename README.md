@@ -270,6 +270,8 @@ grunt lint
 
   - `{Integer} [max_open]` Maximum number of multiplexed streams that can be open at a time. Defaults to 0 (no maximum).
 
+  - `{Integer} [max_header_size]` `BPMux` adds a control header to each message it sends, which the receiver reads into memory. The header is of variable length &mdash; for example, handshake messages contain handshake data which can be supplied by the application. `max_header_size` is the maximum number of header bytes to read into memory. If a larger header is received, `BPMux` emits an `error` event. Defaults to 0 (no limit).
+
 <sub>Go: [TOC](#tableofcontents)</sub>
 
 <a name="bpmuxprototype"></a>

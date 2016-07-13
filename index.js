@@ -361,6 +361,8 @@ Constructor for a `BPMux` object which multiplexes more than one [`stream.Duplex
   - `{Boolean} [high_channels]` `BPMux` assigns unique channel numbers to multiplexed streams. By default, it assigns numbers in the range [0..2^31). If your application can synchronise the two `BPMux` instances on each end of the carrier stream so they never call [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) at the same time then you don't need to worry about channel number clashes. For example, one side of the carrier could always call [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) and the other listen for [`handshake`](https://github.com/davedoesdev/bpmux#bpmuxeventshandshakeduplex-handshake_data-delay_handshake) events. Or they could take it in turns. If you can't synchronise both sides of the carrier, you can get one side to use a different range by specifying `high_channels` as `true`. The `BPMux` with `high_channels` set to `true` will assign channel numbers in the range [2^31..2^32).
 
   - `{Integer} [max_open]` Maximum number of multiplexed streams that can be open at a time. Defaults to 0 (no maximum).
+
+  - `{Integer} [max_header_size]` `BPMux` adds a control header to each message it sends, which the receiver reads into memory. The header is of variable length &mdash; for example, handshake messages contain handshake data which can be supplied by the application. `max_header_size` is the maximum number of header bytes to read into memory. If a larger header is received, `BPMux` emits an `error` event. Defaults to 0 (no limit).
 */
 function BPMux(carrier, options)
 {
@@ -370,6 +372,7 @@ function BPMux(carrier, options)
 
     this._max_duplexes = Math.pow(2, 31);
     this._max_open = options.max_open || 0;
+    this._max_header_size = options.max_header_size || 0;
     this.duplexes = new Map();
     this._chan = 0;
     this._chan_offset = options.high_channels ? this._max_duplexes : 0;
@@ -496,12 +499,26 @@ function BPMux(carrier, options)
             }
             else
             {
-                ths._header_buffers.push(data);
-                ths._header_buffer_len += data.length;
+                if ((ths._max_header_size <= 0) || 
+                    (ths._header_buffer_len < ths._max_header_size))
+                {
+                    ths._header_buffers.push(data);
+                    ths._header_buffer_len += data.length;
+                }
 
                 if (data.frameEnd)
                 {
-                    ths._process_header(Buffer.concat(ths._header_buffers, ths._header_buffer_len));
+                    if ((ths._max_header_size <= 0) ||
+                        (ths._header_buffer_len < ths._max_header_size))
+                    {
+                        ths._process_header(Buffer.concat(ths._header_buffers,
+                                                          ths._header_buffer_len));
+                    }
+                    else
+                    {
+                        ths.emit('error', new Error('header too big'));
+                    }
+
                     ths._header_buffers = [];
                     ths._header_buffer_len = 0;
                 }

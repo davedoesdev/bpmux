@@ -1841,9 +1841,9 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     });
 
     it(new WithOptions('should emit a full event when maximum number of open duplexes exceeded',
-                            {
-                                max_open: 3
-                            }),
+                       {
+                           max_open: 3
+                       }),
     function (cb)
     {
         server_mux.on('full', cb);
@@ -1852,6 +1852,32 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         client_mux.multiplex();
         client_mux.multiplex();
         client_mux.multiplex();
+    });
+
+    it(new WithOptions('should be able to limit header size',
+                       {
+                           max_header_size: 64 * 1024
+                       }),
+    function (cb)
+    {
+        client_mux.multiplex().on('handshake', function ()
+        {
+            server_mux.on('handshake', function ()
+            {
+                cb(new Error('should not be called'));
+            });
+
+            server_mux.on('error', function (err)
+            {
+                expect(err.message).to.equal('header too big');
+                cb();
+            });
+
+            client_mux.multiplex(
+            {
+                handshake_data: new Buffer(1024 * 1024)
+            });
+        });
     });
 }
 
