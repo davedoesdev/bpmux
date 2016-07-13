@@ -246,6 +246,7 @@ grunt lint
 - <a name="toc_bpmuxeventshandshake_sentduplex-complete"></a>[BPMux.events.handshake_sent](#bpmuxeventshandshake_sentduplex-complete)
 - <a name="toc_bpmuxeventsend"></a>[BPMux.events.end](#bpmuxeventsend)
 - <a name="toc_bpmuxeventsfinish"></a>[BPMux.events.finish](#bpmuxeventsfinish)
+- <a name="toc_bpmuxeventsfull"></a>[BPMux.events.full](#bpmuxeventsfull)
 
 ## BPMux(carrrier, [options])
 
@@ -266,6 +267,8 @@ grunt lint
   - `{Boolean} [coalesce_writes]` Whether to batch together writes to the carrier. When the carrier indicates it's ready to receive data, its spare capacity is shared equally between the multiplexed streams. By default, the data from each stream is written separately to the carrier. Specify `true` to write all the data to the carrier in a single write. Depending on the carrier, this can be more performant.
 
   - `{Boolean} [high_channels]` `BPMux` assigns unique channel numbers to multiplexed streams. By default, it assigns numbers in the range [0..2^31). If your application can synchronise the two `BPMux` instances on each end of the carrier stream so they never call [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) at the same time then you don't need to worry about channel number clashes. For example, one side of the carrier could always call [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) and the other listen for [`handshake`](https://github.com/davedoesdev/bpmux#bpmuxeventshandshakeduplex-handshake_data-delay_handshake) events. Or they could take it in turns. If you can't synchronise both sides of the carrier, you can get one side to use a different range by specifying `high_channels` as `true`. The `BPMux` with `high_channels` set to `true` will assign channel numbers in the range [2^31..2^32).
+
+  - `{Integer} [max_open]` Maximum number of multiplexed streams that can be open at a time. Defaults to 0 (no maximum).
 
 <sub>Go: [TOC](#tableofcontents)</sub>
 
@@ -293,7 +296,7 @@ grunt lint
 
 **Throws:**
 
-- `{Error}` If there are no channel numbers left to allocate to the new stream.
+- `{Error}` If there are no channel numbers left to allocate to the new stream or the maximum number of open multiplexed streams would be exceeded.
 
 <sub>Go: [TOC](#tableofcontents) | [BPMux.prototype](#toc_bpmuxprototype)</sub>
 
@@ -357,6 +360,14 @@ no more data).
 
 A `BPMux` object emits a `finish` event after the carrier stream finishes (won't
 write any more data).
+
+<sub>Go: [TOC](#tableofcontents) | [BPMux.events](#toc_bpmuxevents)</sub>
+
+## BPMux.events.full()
+
+> `full` event
+
+A `BPMux` object emits a `full` event when it detects a new multiplexed stream from its peer on the carrier stream but the number of multiplexed streams is at its maximum.
 
 <sub>Go: [TOC](#tableofcontents) | [BPMux.events](#toc_bpmuxevents)</sub>
 

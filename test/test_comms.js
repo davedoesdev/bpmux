@@ -1839,6 +1839,20 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         });
         /*jslint unparam: false */
     });
+
+    it(new WithOptions('should emit a full event when maximum number of open duplexes exceeded',
+                            {
+                                max_open: 3
+                            }),
+    function (cb)
+    {
+        server_mux.on('full', cb);
+        client_mux._max_open = 0;
+        client_mux.multiplex();
+        client_mux.multiplex();
+        client_mux.multiplex();
+        client_mux.multiplex();
+    });
 }
 
 module.exports = function(

@@ -54,3 +54,10 @@ A `BPMux` object emits a `finish` event after the carrier stream finishes (won't
 write any more data).
 */
 BPMux.events.finish = function () { return undefined; };
+
+/**
+`full` event
+
+A `BPMux` object emits a `full` event when it detects a new multiplexed stream from its peer on the carrier stream but the number of multiplexed streams is at its maximum.
+*/
+BPMux.events.full = function () { return undefined; };

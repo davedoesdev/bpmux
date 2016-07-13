@@ -359,6 +359,8 @@ Constructor for a `BPMux` object which multiplexes more than one [`stream.Duplex
   - `{Boolean} [coalesce_writes]` Whether to batch together writes to the carrier. When the carrier indicates it's ready to receive data, its spare capacity is shared equally between the multiplexed streams. By default, the data from each stream is written separately to the carrier. Specify `true` to write all the data to the carrier in a single write. Depending on the carrier, this can be more performant.
 
   - `{Boolean} [high_channels]` `BPMux` assigns unique channel numbers to multiplexed streams. By default, it assigns numbers in the range [0..2^31). If your application can synchronise the two `BPMux` instances on each end of the carrier stream so they never call [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) at the same time then you don't need to worry about channel number clashes. For example, one side of the carrier could always call [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) and the other listen for [`handshake`](https://github.com/davedoesdev/bpmux#bpmuxeventshandshakeduplex-handshake_data-delay_handshake) events. Or they could take it in turns. If you can't synchronise both sides of the carrier, you can get one side to use a different range by specifying `high_channels` as `true`. The `BPMux` with `high_channels` set to `true` will assign channel numbers in the range [2^31..2^32).
+
+  - `{Integer} [max_open]` Maximum number of multiplexed streams that can be open at a time. Defaults to 0 (no maximum).
 */
 function BPMux(carrier, options)
 {
@@ -367,6 +369,7 @@ function BPMux(carrier, options)
     options = options || {};
 
     this._max_duplexes = Math.pow(2, 31);
+    this._max_open = options.max_open || 0;
     this.duplexes = new Map();
     this._chan = 0;
     this._chan_offset = options.high_channels ? this._max_duplexes : 0;
@@ -565,6 +568,11 @@ BPMux.prototype._process_header = function (buf)
 
     if ((type !== TYPE_FINISHED_STATUS) && !duplex)
     {
+        if ((this._max_open > 0) && (this.duplexes.size === this._max_open))
+        {
+            return this.emit('full');
+        }
+
         duplex = new BPDuplex(this._peer_multiplex_options, this, chan);
         this.emit('peer_multiplex', duplex);
     }
@@ -902,10 +910,15 @@ Multiplex a new `stream.Duplex` over the carrier.
   
 @return {Duplex} The new `Duplex` which is multiplexed over the carrier. This supports back-pressure using the stream [`readable`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_event_readable) event and [`write`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_writable_write_chunk_encoding_callback) method.
 
-@throws {Error} If there are no channel numbers left to allocate to the new stream.
+@throws {Error} If there are no channel numbers left to allocate to the new stream or the maximum number of open multiplexed streams would be exceeded.
 */
 BPMux.prototype.multiplex = function (options)
 {
+    if ((this._max_open > 0) && (this.duplexes.size === this._max_open))
+    {
+        throw new Error('full');
+    }
+
     var ths = this, chan, next;
 
     options = options || {};
