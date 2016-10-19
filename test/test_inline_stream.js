@@ -514,5 +514,19 @@ describe('inline stream', function ()
         lmux.on('finish', cb);
         left.end();
     });
+
+    it('should emit end event on duplex if carrier stream has already ended', function (cb)
+    {
+        rmux.on('end', function ()
+        {
+            var duplex = rmux.multiplex();
+            duplex.on('end', cb);
+            duplex.on('readable', function ()
+            {
+                this.read();
+            });
+        });
+        left.end();
+    });
 });
 
