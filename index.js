@@ -952,6 +952,14 @@ BPMux.prototype.multiplex = function (options)
             });
         }
 
+        if (ths.carrier._readableState.ended)
+        {
+            setImmediate(function ()
+            {
+                duplex.push(null);
+            });
+        }
+
         return duplex;
     }
 
