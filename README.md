@@ -239,7 +239,7 @@ grunt lint
 
 <a name="tableofcontents"></a>
 
-- <a name="toc_bpmuxcarrrier-options"></a>[BPMux](#bpmuxcarrrier-options)
+- <a name="toc_bpmuxcarrier-options"></a>[BPMux](#bpmuxcarrier-options)
 - <a name="toc_bpmuxprototypemultiplexoptions"></a><a name="toc_bpmuxprototype"></a>[BPMux.prototype.multiplex](#bpmuxprototypemultiplexoptions)
 - <a name="toc_bpmuxeventspeer_multiplexduplex"></a><a name="toc_bpmuxevents"></a>[BPMux.events.peer_multiplex](#bpmuxeventspeer_multiplexduplex)
 - <a name="toc_bpmuxeventshandshakeduplex-handshake_data-delay_handshake"></a>[BPMux.events.handshake](#bpmuxeventshandshakeduplex-handshake_data-delay_handshake)
@@ -248,13 +248,13 @@ grunt lint
 - <a name="toc_bpmuxeventsfinish"></a>[BPMux.events.finish](#bpmuxeventsfinish)
 - <a name="toc_bpmuxeventsfull"></a>[BPMux.events.full](#bpmuxeventsfull)
 
-## BPMux(carrrier, [options])
+## BPMux(carrier, [options])
 
 > Constructor for a `BPMux` object which multiplexes more than one [`stream.Duplex`](https://nodejs.org/api/stream.html#stream_class_stream_duplex) over a carrier `Duplex`.
 
 **Parameters:**
 
-- `{Duplex} carrrier` The `Duplex` stream over which other `Duplex` streams will be multiplexed. 
+- `{Duplex} carrier` The `Duplex` stream over which other `Duplex` streams will be multiplexed. 
 - `{Object} [options]` Configuration options: 
   - `{Object} [peer_multiplex_options]` When your `BPMux` object detects a new multiplexed stream from the peer on the carrier, it creates a new `Duplex` and emits a [`peer_multiplex`](#bpmuxeventspeer_multiplexduplex) event. When it creates the `Duplex`, it uses `peer_multiplex_options` to configure it with the following options:
 

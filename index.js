@@ -344,7 +344,7 @@ Constructor for a `BPMux` object which multiplexes more than one [`stream.Duplex
 @constructor
 @extends events.EventEmitter
 
-@param {Duplex} carrrier The `Duplex` stream over which other `Duplex` streams will be multiplexed.
+@param {Duplex} carrier The `Duplex` stream over which other `Duplex` streams will be multiplexed.
 
 @param {Object} [options] Configuration options:
 
@@ -413,7 +413,7 @@ function BPMux(carrier, options)
 
     var ths = this;
 
-    carrier.on('prefinish', function ()
+    function prefinish()
     {
         ths._finished = true;
 
@@ -421,14 +421,16 @@ function BPMux(carrier, options)
         {
             duplex.end();
         }
-    });
+    }
+    carrier.on('prefinish', prefinish);
 
-    carrier.on('finish', function ()
+    function finish()
     {
         ths.emit('finish');
-    });
+    }
+    carrier.on('finish', finish);
 
-    this._in_stream.on('end', function ()
+    function end()
     {
         ths._ended = true;
 
@@ -438,7 +440,12 @@ function BPMux(carrier, options)
         }
 
         ths.emit('end');
-    });
+    }
+    this._in_stream.on('end', end);
+
+    carrier.on('close', prefinish);
+    carrier.on('close', finish);
+    carrier.on('close', end);
 
     function error(err)
     {
