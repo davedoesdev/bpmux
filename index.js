@@ -415,6 +415,9 @@ function BPMux(carrier, options)
 
     function prefinish()
     {
+        carrier.removeListener('prefinish', prefinish);
+        carrier.removeListener('close', prefinish);
+
         ths._finished = true;
 
         for (var duplex of ths.duplexes.values())
@@ -422,16 +425,20 @@ function BPMux(carrier, options)
             duplex.end();
         }
     }
-    carrier.on('prefinish', prefinish);
 
     function finish()
     {
+        carrier.removeListener('finish', finish);
+        carrier.removeListener('close', finish);
+
         ths.emit('finish');
     }
-    carrier.on('finish', finish);
 
     function end()
     {
+        ths._in_stream.removeListener('end', end);
+        carrier.removeListener('close', end);
+
         ths._ended = true;
 
         for (var duplex of ths.duplexes.values())
@@ -441,10 +448,14 @@ function BPMux(carrier, options)
 
         ths.emit('end');
     }
-    this._in_stream.on('end', end);
 
+    carrier.on('prefinish', prefinish);
     carrier.on('close', prefinish);
+
+    carrier.on('finish', finish);
     carrier.on('close', finish);
+
+    this._in_stream.on('end', end);
     carrier.on('close', end);
 
     function error(err)
