@@ -82,5 +82,14 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         this.error(err.stack);
     };
 
-    mocha.run(process.exit);
+    mocha.run(function (failures)
+    {
+        if (failures)
+        {
+            return process.exit(failures);
+        }
+
+        /*global window */
+        window.require('nw.gui').App.quit();
+    });
 };

@@ -78,13 +78,14 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             expect(err.message).to.be.oneOf(
             [
                 'carrier stream ended before end message received',
-                'carrier stream finished before duplex finished'
+                'carrier stream finished before duplex finished',
+                'write after end'
             ]);
             if (err.message === 'carrier stream ended before end message received')
             {
                 this.push(null);
             }
-            else
+            else if (err.message === 'carrier stream finished before duplex finished')
             {
                 // give chance for duplex._ended === true case to occur in
                 // carrier on end/close handler
@@ -158,6 +159,15 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             server_mux = new ServerBPMux(server_conn, options);
             server_mux.setMaxListeners(0);
             server_mux.name = 'server';
+
+            server_mux.on('error', function (err)
+            {
+                if (this.listenerCount('error') === 0)
+                {
+                    expect(err.message).to.equal('write after end');
+                }
+            });
+
             if (client_conn) { cb(); }
         }, function (s)
         {
@@ -168,6 +178,15 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 client_mux = new ClientBPMux(client_conn, options);
                 client_mux.setMaxListeners(0);
                 client_mux.name = 'client';
+
+                client_mux.on('error', function (err)
+                {
+                    if (this.listenerCount('error') === 0)
+                    {
+                        expect(err.message).to.equal('write after end');
+                    }
+                });
+
                 if (server_conn) { cb(); }
             });
         });
@@ -1632,7 +1651,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
               1,
               true);
 
-        calln(new WithOptions('should detect read overflow',
+        calln(new WithOptions('should detect Read overflow',
                               {
                                   peer_multiplex_options: {
                                       highWaterMark: 100

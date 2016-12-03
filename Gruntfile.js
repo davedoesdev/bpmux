@@ -66,7 +66,7 @@ module.exports = function (grunt)
                 command: [
                     'find node_modules -mindepth 1 -maxdepth 1 -exec rm -f test/fixtures/nw/{} \\;',
                     'find node_modules -mindepth 1 -maxdepth 1 -not -name nw-builder -exec ln -sf ../../../../{} test/fixtures/nw/{} \\;',
-                    './node_modules/.bin/nwbuild --quiet -p linux64 -v 0.12.3 test/fixtures/nw'
+                    './node_modules/.bin/nwbuild --quiet -p linux64 -v 0.19.0 test/fixtures/nw'
                 ].join('&&')
             },
 
@@ -75,11 +75,11 @@ module.exports = function (grunt)
             },
 
             bundle: {
-                command: './node_modules/.bin/webpack --module-bind json test/fixtures/webpack/bundler.js test/fixtures/webpack/bundle.js'
+                command: './node_modules/.bin/webpack --module-bind json=json-loader test/fixtures/webpack/bundler.js test/fixtures/webpack/bundle.js'
             },
 
             bundle_example: {
-                command: './node_modules/.bin/webpack --module-bind json test/fixtures/example/bundler.js test/fixtures/example/bundle.js'
+                command: './node_modules/.bin/webpack --module-bind json=json-loader test/fixtures/example/bundler.js test/fixtures/example/bundle.js'
             }
         }
     });
