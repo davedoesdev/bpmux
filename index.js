@@ -377,7 +377,6 @@ function BPMux(carrier, options)
     this._chan = 0;
     this._chan_offset = options.high_channels ? this._max_duplexes : 0;
     this._finished = false;
-    this._Finished = false;
     this._ended = false;
     this._header_buffers = [];
     this._header_buffer_len = 0;
@@ -414,21 +413,18 @@ function BPMux(carrier, options)
 
     var ths = this;
 
-    function prefinish()
+    function finish()
     {
         if (ths._finished) { return; }
         ths._finished = true;
 
         for (var duplex of ths.duplexes.values())
         {
-            duplex.end();
+            if (!duplex._finished)
+            {
+                duplex.emit('error', new Error('carrier stream finished before duplex finished'));
+            }
         }
-    }
-
-    function finish()
-    {
-        if (ths._Finished) { return; }
-        ths._Finished = true;
 
         ths.emit('finish');
     }
@@ -440,14 +436,14 @@ function BPMux(carrier, options)
 
         for (var duplex of ths.duplexes.values())
         {
-            duplex.push(null);
+            if (!duplex._ended)
+            {
+                duplex.emit('error', new Error('carrier stream ended before end message received'));
+            }
         }
 
         ths.emit('end');
     }
-
-    carrier.on('prefinish', prefinish);
-    carrier.on('close', prefinish);
 
     carrier.on('finish', finish);
     carrier.on('close', finish);

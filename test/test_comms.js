@@ -71,6 +71,31 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             }
         };
 
+    function csebemr(duplex)
+    {
+        duplex.on('error', function (err)
+        {
+            expect(err.message).to.be.oneOf(
+            [
+                'carrier stream ended before end message received',
+                'carrier stream finished before duplex finished'
+            ]);
+            if (err.message === 'carrier stream ended before end message received')
+            {
+                this.push(null);
+            }
+            else
+            {
+                // give chance for duplex._ended === true case to occur in
+                // carrier on end/close handler
+                setImmediate(function ()
+                {
+                    duplex.end();
+                });
+            }
+        });
+    }
+
     function add_duplex(duplex)
     {
         duplex.on('end', function ()
@@ -79,7 +104,9 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             {
                 expect(this._mux.duplexes.has(this._chan)).to.equal(false);
                 this._mux._chan = this._chan;
-                expect(this._mux.multiplex({ _delay_handshake: true })._chan).to.equal(this._chan);
+                var d = this._mux.multiplex({ _delay_handshake: true });
+                expect(d._chan).to.equal(this._chan);
+                csebemr(d);
             }
             ended += 1;
             if (check) { check(); }
@@ -149,6 +176,14 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     afterEach(function (cb)
     {
         var i;
+
+        for (i = 0; i < duplexes.length; i += 1)
+        {
+            if (duplexes[i].listenerCount('error') === 0)
+            {
+                csebemr(duplexes[i]);
+            }
+        }
 
         check = function ()
         {
@@ -684,25 +719,27 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             called = false,
             error_events;
 
-        sender.on('error', function (e)
+        sender.on('error', function onerr(e)
         {
             expect(e).to.equal(err);
             n1 += 1;
             expect(n1).to.be.at.most(4);
             if ((n1 === 4) && (n2 === 3) && !called)
             {
+                this.removeListener('error', onerr);
                 cb();
                 called = true;
             }
         });
 
-        sender._mux.on('error', function (e)
+        sender._mux.on('error', function onerr(e)
         {
             expect(e).to.equal(err);
             n2 += 1;
             expect(n2).to.be.at.most(3);
             if ((n1 === 4) && (n2 === 3) && !called)
             {
+                this.removeListener('error', onerr);
                 cb();
                 called = true;
             }
@@ -762,6 +799,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
     function emit_error(sender, receiver, cb)
     {
+        receiver._mux.on('peer_multiplex', csebemr);
+
         receiver._mux.on('error', function (err)
         {
             expect(err.message).to.equal('expected handshake, got: 255');
@@ -840,7 +879,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             },
             receiver._mux._in_stream._events.readable];
 
-        receiver.on('error', function (err)
+        receiver.once('error', function (err)
         {
             expect(err.message).to.equal('too much data');
             cb();
@@ -1114,6 +1153,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     {
         var s = '';
 
+        receiver._mux.on('peer_multiplex', csebemr);
+
         receiver.on('readable', function ()
         {
             var data;
@@ -1313,6 +1354,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     {
         var called = false, buf;
 
+        receiver._mux.on('peer_multiplex', csebemr);
+
         receiver._mux.on('error', function (err)
         {
             expect(err.message).to.equal('short buffer length 5 < 9');
@@ -1332,6 +1375,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     function short_pre_handshake_message(sender, receiver, cb)
     {
         var called = false, buf;
+
+        receiver._mux.on('peer_multiplex', csebemr);
 
         receiver._mux.on('error', function (err)
         {
@@ -1372,6 +1417,18 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 cb();
             }
         });
+    }
+
+    function end_without_finish(sender, receiver, cb)
+    {
+        receiver.on('end', cb);
+        receiver.on('readable', function ()
+        {
+            while (this.read() !== null)
+            {
+            }
+        });
+        sender.end();
     }
 
     function setup(n)
@@ -1512,7 +1569,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
               null,
               true);
 
-        calln('should emit an error when unknown message is received',
+        calln('should emit an error when unknown message type is received',
               unknown_type,
               1);
 
@@ -1632,6 +1689,10 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
               1,
               true);
        
+        calln('end without finish',
+              end_without_finish,
+              1,
+              true);
     }
 
     setup(1);
@@ -1649,6 +1710,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             handshake_data: new ClientBuffer('foo')
         });
         expect(duplex._handshake_sent).to.equal(false);
+        csebemr(duplex);
         duplex.on('handshake', function (handshake_data, delay_handshake)
         {
             expect(handshake_data.toString()).to.equal('bar');
@@ -1662,6 +1724,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             expect(handshake_data.toString()).to.equal('foo');
             expect(duplex._handshake_sent).to.equal(false);
             expect(delay_handshake).not.to.equal(null);
+            csebemr(duplex);
             delay_handshake()(new Buffer('bar'));
         });
     });
@@ -1846,12 +1909,13 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                        }),
     function (cb)
     {
+        server_mux.on('peer_multiplex', csebemr);
         server_mux.on('full', cb);
         client_mux._max_open = 0;
-        client_mux.multiplex();
-        client_mux.multiplex();
-        client_mux.multiplex();
-        client_mux.multiplex();
+        csebemr(client_mux.multiplex());
+        csebemr(client_mux.multiplex());
+        csebemr(client_mux.multiplex());
+        csebemr(client_mux.multiplex());
     });
 
     it(new WithOptions('should be able to limit header size',
@@ -1860,7 +1924,10 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                        }),
     function (cb)
     {
-        client_mux.multiplex().on('handshake', function ()
+        server_mux.on('peer_multiplex', csebemr);
+        var duplex = client_mux.multiplex();
+        csebemr(duplex);
+        duplex.on('handshake', function ()
         {
             server_mux.on('handshake', function ()
             {
@@ -1873,10 +1940,10 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 cb();
             });
 
-            client_mux.multiplex(
+            csebemr(client_mux.multiplex(
             {
                 handshake_data: new Buffer(1024 * 1024)
-            });
+            }));
         });
     });
 }
