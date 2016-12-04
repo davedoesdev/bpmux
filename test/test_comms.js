@@ -17,6 +17,16 @@ var path = require('path'),
     expect = chai.expect,
     random_fname = path.join(__dirname, 'fixtures', 'random');
 
+function listenerCount(ee, name)
+{
+    if (ee.listenerCount)
+    {
+        return ee.listenerCount(name);
+    }
+
+    return require('events').listenerCount(ee, 'error');
+}
+
 function WithOptions(title, mux_options, multiplex_options)
 {
     this.title = title;
@@ -162,11 +172,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             server_mux.on('error', function (err)
             {
-                var count = this.listenerCount ?
-                        this.listenerCount('error') :
-                        require('events').listenerCount(this, 'error');
-
-                if (count === 0)
+                if (listenerCount(this, 'error') === 0)
                 {
                     expect(err.message).to.equal('write after end');
                 }
@@ -185,7 +191,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
                 client_mux.on('error', function (err)
                 {
-                    if (this.listenerCount('error') === 0)
+                    if (listenerCount(this, 'error') === 0)
                     {
                         expect(err.message).to.equal('write after end');
                     }
@@ -202,7 +208,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         for (i = 0; i < duplexes.length; i += 1)
         {
-            if (duplexes[i].listenerCount('error') === 0)
+            if (listenerCount(duplexes[i], 'error') === 0)
             {
                 csebemr(duplexes[i]);
             }
