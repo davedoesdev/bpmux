@@ -162,7 +162,11 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             server_mux.on('error', function (err)
             {
-                if (this.listenerCount('error') === 0)
+                var count = this.listenerCount ?
+                        this.listenerCount('error') :
+                        require('events').listenerCount(this, 'error');
+
+                if (count === 0)
                 {
                     expect(err.message).to.equal('write after end');
                 }
@@ -738,31 +742,36 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             called = false,
             error_events;
 
-        sender.on('error', function onerr(e)
+        
+        function onerr1(e)
         {
             expect(e).to.equal(err);
             n1 += 1;
             expect(n1).to.be.at.most(4);
             if ((n1 === 4) && (n2 === 3) && !called)
             {
-                this.removeListener('error', onerr);
+                sender.removeListener('error', onerr1);
+                sender._mux.removeListener('error', onerr2);
                 cb();
                 called = true;
             }
-        });
+        }
+        sender.on('error', onerr1);
 
-        sender._mux.on('error', function onerr(e)
+        function onerr2(e)
         {
             expect(e).to.equal(err);
             n2 += 1;
             expect(n2).to.be.at.most(3);
             if ((n1 === 4) && (n2 === 3) && !called)
             {
-                this.removeListener('error', onerr);
+                sender.removeListener('error', onerr1);
+                sender._mux.removeListener('error', onerr2);
                 cb();
                 called = true;
             }
-        });
+        }
+        sender._mux.on('error', onerr2);
 
         // Readable unpipes on error (_stream_readable.js, function onerror),
         // which means we'll never get EOF when cleaning up.
