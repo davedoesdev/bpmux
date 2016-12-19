@@ -1980,6 +1980,83 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             }));
         });
     });
+
+    it('should be able to emit error on and end peer duplex', function (cb)
+    {
+        var duplex = client_mux.multiplex();
+        csebemr(duplex);
+
+        server_mux.on('handshake', function (duplex)
+        {
+            var error, bufs = [];
+
+            duplex.on('error', function (err)
+            {
+                error = err;
+            });
+
+            duplex.on('readable', function ()
+            {
+                while (true)
+                {
+                    var data = this.read();
+                    if (data === null) { break; }
+                    bufs.push(data);
+                }
+            });
+
+            duplex.on('end', function ()
+            {
+                expect(Buffer.concat(bufs).toString()).to.equal('hello');
+                expect(error.message).to.equal('peer error');
+                cb();
+            });
+        });
+
+        duplex.peer_error_then_end('hello');
+    });
+
+    it('should be able to emit error on and end peer duplex (before handshake)', function (cb)
+    {
+        var duplex = client_mux.multiplex(
+        {
+            _delay_handshake: true
+        });
+        csebemr(duplex);
+
+        server_mux.on('handshake', function (duplex)
+        {
+            var error, bufs = [];
+
+            duplex.on('error', function (err)
+            {
+                error = err;
+            });
+
+            duplex.on('readable', function ()
+            {
+                while (true)
+                {
+                    var data = this.read();
+                    if (data === null) { break; }
+                    bufs.push(data);
+                }
+            });
+
+            duplex.on('end', function ()
+            {
+                expect(Buffer.concat(bufs).toString()).to.equal('');
+                expect(error.message).to.equal('peer error');
+                cb();
+            });
+        });
+
+        duplex.peer_error_then_end();
+        setTimeout(function ()
+        {
+            duplex._send_handshake();
+        }, 500);
+    });
 }
 
 module.exports = function(

@@ -251,7 +251,8 @@ var util = require('util'),
     TYPE_STATUS = 2,
     TYPE_FINISHED_STATUS = 3,
     TYPE_DATA = 4,
-    TYPE_PRE_HANDSHAKE = 5;
+    TYPE_PRE_HANDSHAKE = 5,
+    TYPE_ERROR_END = 6;
 
 function BPDuplex(options, mux, chan)
 {
@@ -275,6 +276,8 @@ function BPDuplex(options, mux, chan)
     this._handshake_sent = false;
     this._handshake_received = false;
     this._end_pending = false;
+    this._error_end = false;
+    this._error_end_pending = false;
 
     this.on('finish', function ()
     {
@@ -336,6 +339,12 @@ BPDuplex.prototype._write = function (data, encoding, cb)
     this._data = data;
     this._cb = cb;
     this._mux._send();
+};
+
+BPDuplex.prototype.peer_error_then_end = function (chunk, encoding, cb)
+{
+    this._error_end = true;
+    return this.end(chunk, encoding, cb);
 };
 
 /**
@@ -615,6 +624,13 @@ BPMux.prototype._process_header = function (buf)
                 duplex.push(null);
                 break;
 
+            case TYPE_ERROR_END:
+                duplex._ended = true;
+                duplex._check_remove();
+                duplex.emit('error', new Error('peer error'));
+                duplex.push(null);
+                break;
+
             case TYPE_STATUS:
             case TYPE_FINISHED_STATUS:
                 if (!this._check_buffer(buf, 13)) { return; }
@@ -638,6 +654,10 @@ BPMux.prototype._process_header = function (buf)
     {
         case TYPE_END:
             duplex._end_pending = true;
+            break;
+
+        case TYPE_ERROR_END:
+            duplex._error_end_pending = true;
             break;
 
         case TYPE_PRE_HANDSHAKE:
@@ -669,7 +689,15 @@ BPMux.prototype._process_header = function (buf)
             {
                 duplex._send_handshake();
             }
-            if (duplex._end_pending)
+            if (duplex._error_end_pending)
+            {
+                duplex._ended = true;
+                duplex._check_remove();
+                duplex.emit('error', new Error('peer error'));
+                duplex.push(null);
+                duplex._end_pending = false;
+            }
+            else if (duplex._end_pending)
             {
                 duplex._ended = true;
                 duplex._check_remove();
@@ -701,7 +729,7 @@ BPMux.prototype._send_end = function (duplex)
 
     var buf = new Buffer(1 + 4);
 
-    buf.writeUInt8(TYPE_END, 0, true);
+    buf.writeUInt8(duplex._error_end ? TYPE_ERROR_END : TYPE_END, 0, true);
     buf.writeUInt32BE(duplex._chan, 1, true);
 
     this._out_stream.write(buf);
