@@ -759,13 +759,11 @@ BPMux.prototype._send_handshake = function (duplex, handshake_data)
         duplex._handshake_sent = true;
     }
 
-    var r = this._out_stream.write(buf);
+    var r = this._out_stream.write(buf),
+        evname = handshake_data ? 'handshake_sent' : 'pre_handshake_sent';
 
-    if (handshake_data)
-    {
-        this.emit('handshake_sent', duplex, r);
-        duplex.emit('handshake_sent', r);
-    }
+    this.emit(evname, duplex, r);
+    duplex.emit(evname, r);
 
     this._send();
 };

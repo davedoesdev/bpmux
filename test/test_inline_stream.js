@@ -397,6 +397,66 @@ describe('inline stream', function ()
         });
     });
 
+    it('should emit pre_handshake_sent event', function (cb)
+    {
+        var lcomplete,
+            lcomplete2,
+            rcomplete,
+            rcomplete2,
+            rcomplete3,
+            rcomplete4;
+
+        function check()
+        {
+            if (lcomplete && lcomplete2 && rcomplete && rcomplete2 && rcomplete3)
+            {
+                cb();
+            }
+        }
+
+        rmux.on('handshake', function (duplex, hsdata, delay)
+        {
+            var hs = delay();
+
+            duplex.on('pre_handshake_sent', function (complete)
+            {
+                rcomplete = complete;
+                check();
+                hs();
+            });
+
+            duplex.on('handshake_sent', function (complete)
+            {
+                rcomplete4 = complete;
+                check();
+            });
+        });
+
+        rmux.on('pre_handshake_sent', function (duplex, complete)
+        {
+            rcomplete2 = complete;
+            check();
+        });
+
+        rmux.on('handshake_sent', function (duplex, complete)
+        {
+            rcomplete3 = complete;
+            check();
+        });
+
+        lmux.on('handshake_sent', function (duplex, complete)
+        {
+            lcomplete2 = complete;
+            check();
+        });
+
+        lmux.multiplex().on('handshake_sent', function (complete)
+        {
+            lcomplete = complete;
+            check();
+        });
+    });
+
     it('should support backpressure on handshakes', function (cb)
     {
         this.timeout(2 * 60 * 1000);
