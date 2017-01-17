@@ -20,7 +20,13 @@ describe('channel number full', function ()
 {
     it('should throw a full exception when maximum number of duplexes exceeded', function (cb)
     {
-        var mux = new BPMux(dummy_carrier);
+        var mux = new BPMux(dummy_carrier),
+            full_emitted = false;
+
+        mux.on('full', function ()
+        {
+            full_emitted = true;
+        });
 
         mux._max_duplexes = 3;
 
@@ -28,11 +34,14 @@ describe('channel number full', function ()
         mux.multiplex({ _delay_handshake: true });
         mux.multiplex({ _delay_handshake: true });
 
+        expect(full_emitted).to.equal(false);
+
         function fn()
         {
             mux.multiplex({ _delay_handshake: true });
         }
         expect(fn).to.throw(Error);
+        expect(full_emitted).to.equal(true);
         expect(fn).to.throw('full');
 
         cb();
@@ -40,21 +49,29 @@ describe('channel number full', function ()
 
     it('should throw a full exception when maximum number of open duplexes exceeded', function (cb)
     {
-        var mux = new BPMux(dummy_carrier, { max_open: 3 });
+        var mux = new BPMux(dummy_carrier, { max_open: 3 }),
+            full_emitted = false;
+
+        mux.on('full', function ()
+        {
+            full_emitted = true;
+        });
 
         mux.multiplex({ _delay_handshake: true });
         mux.multiplex({ _delay_handshake: true });
         mux.multiplex({ _delay_handshake: true });
+
+        expect(full_emitted).to.equal(false);
 
         function fn()
         {
             mux.multiplex({ _delay_handshake: true });
         }
         expect(fn).to.throw(Error);
+        expect(full_emitted).to.equal(true);
         expect(fn).to.throw('full');
 
         cb();
-
     });
 
 });

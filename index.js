@@ -970,6 +970,7 @@ BPMux.prototype.multiplex = function (options)
 {
     if ((this._max_open > 0) && (this.duplexes.size === this._max_open))
     {
+        this.emit('full');
         throw new Error('full');
     }
 
@@ -1021,6 +1022,7 @@ BPMux.prototype.multiplex = function (options)
     }
     while (chan !== this._chan);
 
+    this.emit('full');
     throw new Error('full');
 };
 
