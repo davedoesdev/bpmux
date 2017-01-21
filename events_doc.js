@@ -74,7 +74,7 @@ BPMux.events.full = function () { return undefined; };
 `removed` event
 
 A `BPMux` object emits a `removed` event when a multiplexed stream has closed
-(finished and ended) and removed from the list of multiplexed streams.
+(finished and ended) and been removed from the list of multiplexed streams.
 
 @param {Duplex} duplex The stream which has closed.
 */

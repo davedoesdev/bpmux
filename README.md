@@ -389,7 +389,7 @@ A `BPMux` object emits a `full` event when it wants to add a new multiplexed str
 > `removed` event
 
 A `BPMux` object emits a `removed` event when a multiplexed stream has closed
-(finished and ended) and removed from the list of multiplexed streams.
+(finished and ended) and been removed from the list of multiplexed streams.
 
 **Parameters:**
 
