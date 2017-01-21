@@ -66,6 +66,16 @@ BPMux.events.finish = function () { return undefined; };
 /**
 `full` event
 
-A `BPMux` object emits a `full` event when it detects a new multiplexed stream from its peer on the carrier stream but the number of multiplexed streams is at its maximum.
+A `BPMux` object emits a `full` event when it wants to add a new multiplexed stream on the carrier stream but the number of multiplexed streams is at its maximum. It will remain at maximum until a [`removed`](#bpmuxeventsremoved) event is emitted.
 */
 BPMux.events.full = function () { return undefined; };
+
+/**
+`removed` event
+
+A `BPMux` object emits a `removed` event when a multiplexed stream has closed
+(finished and ended) and removed from the list of multiplexed streams.
+
+@param {Duplex} duplex The stream which has closed.
+*/
+BPMux.events.removed = function (duplex) { return undefined; };

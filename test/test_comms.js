@@ -1943,12 +1943,40 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                        }),
     function (cb)
     {
+        var count = 0, third_server, third_client;
         server_mux.on('peer_multiplex', csebemr);
-        server_mux.on('full', cb);
+        server_mux.on('peer_multiplex', function (duplex)
+        {
+            count += 1;
+            if (count === 3)
+            {
+                third_server = duplex;
+            }
+        });
+        server_mux.on('full', function ()
+        {
+            var called = false;
+
+            this.on('removed', function (duplex)
+            {
+                expect(called).to.equal(false);
+                called = true;
+                expect(duplex).to.equal(third_server);
+
+                // check we only emit event if actually delete from duplexes Map
+                this._remove(duplex);
+
+                cb();
+            });
+
+            third_client.end();
+            third_server.end();
+        });
         client_mux._max_open = 0;
         csebemr(client_mux.multiplex());
         csebemr(client_mux.multiplex());
-        csebemr(client_mux.multiplex());
+        third_client = client_mux.multiplex();
+        csebemr(third_client);
         csebemr(client_mux.multiplex());
     });
 

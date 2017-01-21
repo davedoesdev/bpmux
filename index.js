@@ -720,8 +720,12 @@ BPMux.prototype._process_header = function (buf)
 
 BPMux.prototype._remove = function (duplex)
 {
-    this.duplexes.delete(duplex._chan);
     duplex._removed = true;
+
+    if (this.duplexes.delete(duplex._chan))
+    {
+        this.emit('removed', duplex);
+    }
 };
 
 BPMux.prototype._send_end = function (duplex)

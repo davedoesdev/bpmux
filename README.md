@@ -248,6 +248,7 @@ grunt lint
 - <a name="toc_bpmuxeventsend"></a>[BPMux.events.end](#bpmuxeventsend)
 - <a name="toc_bpmuxeventsfinish"></a>[BPMux.events.finish](#bpmuxeventsfinish)
 - <a name="toc_bpmuxeventsfull"></a>[BPMux.events.full](#bpmuxeventsfull)
+- <a name="toc_bpmuxeventsremovedduplex"></a>[BPMux.events.removed](#bpmuxeventsremovedduplex)
 
 ## BPMux(carrier, [options])
 
@@ -379,7 +380,20 @@ write any more data).
 
 > `full` event
 
-A `BPMux` object emits a `full` event when it detects a new multiplexed stream from its peer on the carrier stream but the number of multiplexed streams is at its maximum.
+A `BPMux` object emits a `full` event when it wants to add a new multiplexed stream on the carrier stream but the number of multiplexed streams is at its maximum. It will remain at maximum until a [`removed`](#bpmuxeventsremoved) event is emitted.
+
+<sub>Go: [TOC](#tableofcontents) | [BPMux.events](#toc_bpmuxevents)</sub>
+
+## BPMux.events.removed(duplex)
+
+> `removed` event
+
+A `BPMux` object emits a `removed` event when a multiplexed stream has closed
+(finished and ended) and removed from the list of multiplexed streams.
+
+**Parameters:**
+
+- `{Duplex} duplex` The stream which has closed.
 
 <sub>Go: [TOC](#tableofcontents) | [BPMux.events](#toc_bpmuxevents)</sub>
 
