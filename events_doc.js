@@ -35,9 +35,17 @@ A `BPMux` object emits a `handshake_sent` event after it sends a handshake messa
 
 @param {Duplex} duplex The multiplexed stream for which a handshake has been sent. **Please note that a `handshake_sent` event is also emitted on `duplex` immediately after `BPMux`'s `handshake` event finishes processing**. `duplex`'s `handshake_sent` event is passed the same `complete` parameter described below.
 
-@param {Boolean} complete Whether the handshake message was completely sent (`true`) or the carrier stream buffered it (`false`). You can use this to apply back-pressure to stream multiplexing. For example, if `complete` is `false` then you could avoid calling [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) until the carrier stream has emitted a [`drain`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_event_drain) event.
+@param {Boolean} complete Whether the handshake message was completely sent (`true`) or the carrier stream buffered it (`false`). You can use this to apply back-pressure to stream multiplexing. For example, if `complete` is `false` then you could avoid calling [`multiplex`](https://github.com/davedoesdev/bpmux#bpmuxprototypemultiplexoptions) until a [`drain`](#bpmuxeventsdrain) event is emitted.
 */
 BPMux.events.handshake_sent = function (duplex, complete) { return undefined; };
+
+/**
+`drain` event
+
+A `BPMux` object emits a `drain` event when its carrier stream emits a
+[`drain`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_event_drain) event.
+*/
+BPMux.events.drain = function () { return undefined; };
 
 /**
 `end` event

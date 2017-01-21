@@ -461,12 +461,21 @@ describe('inline stream', function ()
     {
         this.timeout(2 * 60 * 1000);
 
-        left._write = function ()
+        var orig_write = left._write,
+            write_chunk,
+            write_encoding,
+            write_cb;
+
+        left._write = function (chunk, encoding, cb)
         {
+            write_chunk = chunk;
+            write_encoding = encoding;
+            write_cb = cb;
         };
 
         var count_complete = 0,
-            count_incomplete = 0;
+            count_incomplete = 0,
+            count_drain = 0;
 
         function sent(complete)
         {
@@ -482,9 +491,18 @@ describe('inline stream', function ()
             {
                 expect(count_complete).to.equal(4342);
                 expect(count_incomplete).to.equal(1);
-                cb();
+                expect(count_drain).to.equal(0);
+                left._write = orig_write;
+                left._write(write_chunk, write_encoding, write_cb);
             }
         }
+
+        lmux.on('drain', function ()
+        {
+            expect(count_drain).to.equal(0);
+            count_drain += 1;
+            cb();
+        });
 
         // number will change if change handshake buffer size
         for (var i = 0; i < 4343; i += 1)
