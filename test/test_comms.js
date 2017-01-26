@@ -115,9 +115,12 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             {
                 expect(this._mux.duplexes.has(this._chan)).to.equal(false);
                 this._mux._chan = this._chan;
-                var d = this._mux.multiplex({ _delay_handshake: true });
-                expect(d._chan).to.equal(this._chan);
-                csebemr(d);
+                if (!this._mux.carrier._writableState.finished)
+                {
+                    var d = this._mux.multiplex({ _delay_handshake: true });
+                    expect(d._chan).to.equal(this._chan);
+                    csebemr(d);
+                }
             }
             ended += 1;
             if (check) { check(); }

@@ -13,7 +13,8 @@ var dummy_carrier = {
     emit: function () { return undefined; },
     pipe: function () { return undefined; },
     prependListener: function () { return undefined; },
-    _readableState: { ended: false }
+    _readableState: { ended: false },
+    _writableState: { finished: false }
 };
 
 describe('channel number full', function ()

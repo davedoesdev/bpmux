@@ -593,16 +593,33 @@ describe('inline stream', function ()
         left.end();
     });
 
-    it('should emit end event on duplex if carrier stream has already ended', function (cb)
+    it('multiplex() should throw error if carrier stream has already ended', function (cb)
     {
         rmux.on('end', function ()
         {
-            var duplex = rmux.multiplex();
-            duplex.on('end', cb);
-            duplex.on('readable', function ()
+            expect(function ()
             {
-                this.read();
-            });
+                rmux.multiplex();
+            }).to.throw('ended');
+            cb();
+        });
+        left.end();
+    });
+
+    it('multiplex() should throw error if carrier stream has already finished', function (cb)
+    {
+        rmux.carrier.on('end', function ()
+        {
+            this.end();
+        });
+
+        rmux.on('finish', function ()
+        {
+            expect(function ()
+            {
+                rmux.multiplex();
+            }).to.throw('finished');
+            cb();
         });
         left.end();
     });

@@ -969,7 +969,7 @@ Multiplex a new `stream.Duplex` over the carrier.
   
 @return {Duplex} The new `Duplex` which is multiplexed over the carrier. This supports back-pressure using the stream [`readable`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_event_readable) event and [`write`](https://nodejs.org/dist/latest-v4.x/docs/api/stream.html#stream_writable_write_chunk_encoding_callback) method.
 
-@throws {Error} If there are no channel numbers left to allocate to the new stream or the maximum number of open multiplexed streams would be exceeded.
+@throws {Error} If there are no channel numbers left to allocate to the new stream, the maximum number of open multiplexed streams would be exceeded or the carrier has finished or ended.
 */
 BPMux.prototype.multiplex = function (options)
 {
@@ -977,6 +977,16 @@ BPMux.prototype.multiplex = function (options)
     {
         this.emit('full');
         throw new Error('full');
+    }
+
+    if (this.carrier._writableState.finished)
+    {
+        throw new Error('finished');
+    }
+
+    if (this.carrier._readableState.ended)
+    {
+        throw new Error('ended');
     }
 
     var ths = this, chan, next;
@@ -992,14 +1002,6 @@ BPMux.prototype.multiplex = function (options)
             setImmediate(function ()
             {
                 duplex._send_handshake(options.handshake_data);
-            });
-        }
-
-        if (ths.carrier._readableState.ended)
-        {
-            setImmediate(function ()
-            {
-                duplex.push(null);
             });
         }
 
