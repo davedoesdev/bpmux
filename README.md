@@ -300,7 +300,7 @@ grunt lint
 
 **Throws:**
 
-- `{Error}` If there are no channel numbers left to allocate to the new stream or the maximum number of open multiplexed streams would be exceeded.
+- `{Error}` If there are no channel numbers left to allocate to the new stream, the maximum number of open multiplexed streams would be exceeded or the carrier has finished or ended.
 
 <sub>Go: [TOC](#tableofcontents) | [BPMux.prototype](#toc_bpmuxprototype)</sub>
 

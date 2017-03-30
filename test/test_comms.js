@@ -1956,24 +1956,29 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 third_server = duplex;
             }
         });
-        server_mux.on('full', function ()
+        // once when reaches 3
+        server_mux.once('full', function ()
         {
-            var called = false;
-
-            this.on('removed', function (duplex)
+            // once when then receives 4th
+            server_mux.once('full', function ()
             {
-                expect(called).to.equal(false);
-                called = true;
-                expect(duplex).to.equal(third_server);
+                var called = false;
 
-                // check we only emit event if actually delete from duplexes Map
-                this._remove(duplex);
+                this.on('removed', function (duplex)
+                {
+                    expect(called).to.equal(false);
+                    called = true;
+                    expect(duplex).to.equal(third_server);
 
-                cb();
+                    // check we only emit event if actually delete from duplexes Map
+                    this._remove(duplex);
+
+                    cb();
+                });
+
+                third_client.end();
+                third_server.end();
             });
-
-            third_client.end();
-            third_server.end();
         });
         client_mux._max_open = 0;
         csebemr(client_mux.multiplex());

@@ -293,6 +293,14 @@ function BPDuplex(options, mux, chan)
     });
 
     mux.duplexes.set(chan, this);
+
+    if ((mux._max_open > 0) && (mux.duplexes.size === mux._max_open))
+    {
+        setImmediate(function ()
+        {
+            mux.emit('full');
+        });
+    }
 }
 
 util.inherits(BPDuplex, Duplex);

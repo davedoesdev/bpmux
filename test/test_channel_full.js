@@ -60,19 +60,21 @@ describe('channel number full', function ()
 
         mux.multiplex({ _delay_handshake: true });
         mux.multiplex({ _delay_handshake: true });
-        mux.multiplex({ _delay_handshake: true });
-
         expect(full_emitted).to.equal(false);
-
-        function fn()
+        mux.multiplex({ _delay_handshake: true });
+        setImmediate(function ()
         {
-            mux.multiplex({ _delay_handshake: true });
-        }
-        expect(fn).to.throw(Error);
-        expect(full_emitted).to.equal(true);
-        expect(fn).to.throw('full');
+            expect(full_emitted).to.equal(true);
 
-        cb();
+            function fn()
+            {
+                mux.multiplex({ _delay_handshake: true });
+            }
+            expect(fn).to.throw(Error);
+            expect(fn).to.throw('full');
+
+            cb();
+        });
     });
 
 });
