@@ -363,7 +363,7 @@ Constructor for a `BPMux` object which multiplexes more than one [`stream.Duplex
 
 @param {Duplex} carrier The `Duplex` stream over which other `Duplex` streams will be multiplexed.
 
-@param {Object} [options] Configuration options:
+@param {Object} [options] Configuration options. This is passed down to [`frame-stream`](https://github.com/rkusa/frame-stream). It also supports the following additional properties:
 
   - `{Object} [peer_multiplex_options]` When your `BPMux` object detects a new multiplexed stream from the peer on the carrier, it creates a new `Duplex` and emits a [`peer_multiplex`](#bpmuxeventspeer_multiplexduplex) event. When it creates the `Duplex`, it uses `peer_multiplex_options` to configure it with the following options:
 
