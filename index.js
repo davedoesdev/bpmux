@@ -488,7 +488,11 @@ function BPMux(carrier, options)
     this._out_stream.on('drain', function ()
     {
         ths._send();
-        ths.emit('drain');
+
+        if (this._writableState.length < this._writableState.highWaterMark)
+        {
+            ths.emit('drain');
+        }
     });
 
     this._in_stream.on('readable', function ()
