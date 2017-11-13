@@ -1,6 +1,12 @@
 /*jslint node: true */
 "use strict";
 
+// Enable passing options in title (WithOptions in test/test_comms.js)
+require('mocha/lib/utils').isString = function (obj)
+{
+    return true;
+};
+
 var net = require('net'),
     util = require('util'),
     os = require('os'),
