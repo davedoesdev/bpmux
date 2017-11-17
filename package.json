@@ -1,7 +1,7 @@
 {
   "name": "bpmux",
   "description": "Node stream multiplexing with back-pressure on each stream",
-  "version": "6.0.0",
+  "version": "6.0.1",
   "homepage": "https://github.com/davedoesdev/bpmux",
   "author": {
     "name": "David Halls",
@@ -56,7 +56,7 @@
     "coveralls": "~3.0.0",
     "webpack": "3.8.1",
     "primus": "~7.1.0",
-    "primus-backpressure": "~1.0.2",
+    "primus-backpressure": "~1.0.3",
     "ws": "~3.3.1",
     "tmp": "~0.0.33",
     "async": "~2.6.0",
