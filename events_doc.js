@@ -24,7 +24,7 @@ A `BPMux` object emits a `handshake` event when it receives a handshake message 
 
 @param {Function|null} [delay_handshake] This parameter will be `null` in case 2 (your application previously created `duplex`). Otherwise (case 1), this parameter will be a function. By default, the `BPMux` object replies to the peer's handshake message as soon as your event handler returns and doesn't attach any application-specific handshake data. If you wish to delay the handshake message or provide handshake data, call `delay_handshake`. It returns another function which you can call at any time to send the handshake message. The returned function takes a single argument:
 
-  - `{Buffer} [handshake_data]` Application-specific handshake data to attach to the handshake message sent to the peer. Defaults to a zero-length `Buffer`.
+ - `{Buffer} [handshake_data]` Application-specific handshake data to attach to the handshake message sent to the peer. Defaults to a zero-length `Buffer`.
 */
 BPMux.events.handshake = function (duplex, handshake_data, delay_handshake) { return undefined; };
 
