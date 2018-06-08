@@ -61,7 +61,7 @@
     "ws": "~5.2.0",
     "tmp": "~0.0.33",
     "async": "~2.6.1",
-    "nw-builder": "~3.5.3",
+    "nw-builder": "~3.5.4",
     "grunt-env": "~0.4.4",
     "serve-static": "~1.13.2",
     "finalhandler": "~1.1.1",
