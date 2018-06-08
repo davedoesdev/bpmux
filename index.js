@@ -242,7 +242,9 @@ grunt lint
 'use strict';
 
 var util = require('util'),
-    Duplex = require('stream').Duplex,
+    stream = require('stream'),
+    Duplex = stream.Duplex,
+    Writable = stream.Writable,
     EventEmitter = require('events').EventEmitter,
     frame = require('frame-stream'),
     max_seq = Math.pow(2, 32),
@@ -494,19 +496,11 @@ function BPMux(carrier, options)
         }
     });
 
-    this._in_stream.on('readable', function ()
+    this._in_stream.pipe(new Writable(
     {
-        var data, duplex;
-
-        while (true)
+        write: function (data, encoding, cb)
         {
-            data = this.read();
-            duplex = ths._reading_duplex;
-
-            if (data === null)
-            {
-                break;
-            }
+            var duplex = ths._reading_duplex;
 
             if (duplex)
             {
@@ -555,8 +549,10 @@ function BPMux(carrier, options)
                     ths._header_buffer_len = 0;
                 }
             }
+
+            cb();
         }
-    });
+    }));
 }
 
 util.inherits(BPMux, EventEmitter);

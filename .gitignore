@@ -4,4 +4,6 @@ cache
 test/fixtures/webpack/bundle.js
 test/fixtures/example/bundle.js
 test/fixtures/nw/primus.js
+test/fixtures/nw/bundle.js
+test/fixtures/nw/node_modules
 /.nyc_output

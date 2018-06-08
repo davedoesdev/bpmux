@@ -74,22 +74,30 @@ module.exports = function (grunt)
 
             nw_build: {
                 command: [
-                    'find node_modules -mindepth 1 -maxdepth 1 -exec rm -f test/fixtures/nw/{} \\;',
-                    'find node_modules -mindepth 1 -maxdepth 1 -not -name nw-builder -exec ln -sf ../../../../{} test/fixtures/nw/{} \\;',
-                    './node_modules/.bin/nwbuild --quiet -p linux64 -v 0.19.0 test/fixtures/nw'
+                    'rsync -a node_modules test/fixtures/nw --exclude nw-builder',
+                    'cp index.js test/fixtures/nw/node_modules/bpmux.js',
+                    'cp test/test_browser.js test/fixtures/nw/node_modules',
+                    'cp test/test_comms.js test/fixtures/nw/node_modules',
+                    'cp test/fixtures/webpack/bundle.js test/fixtures/nw',
+                    'mkdir -p test/fixtures/nw/node_modules/fixtures',
+                    'touch test/fixtures/nw/node_modules/fixtures/keep',
+                    './node_modules/.bin/nwbuild --quiet -p linux64 test/fixtures/nw'
                 ].join('&&')
             },
 
             bpmux_test: {
-                command: './build/bpmux-test/linux64/bpmux-test'
+                command: './build/bpmux-test/linux64/bpmux-test',
+                execOptions: {
+                    maxBuffer: 10000 * 1024
+                }
             },
 
             bundle: {
-                command: './node_modules/.bin/webpack --module-bind json=json-loader test/fixtures/webpack/bundler.js test/fixtures/webpack/bundle.js'
+                command: './node_modules/.bin/webpack --mode production --config test/webpack.config.js'
             },
 
             bundle_example: {
-                command: './node_modules/.bin/webpack --module-bind json=json-loader test/fixtures/example/bundler.js test/fixtures/example/bundle.js'
+                command: './node_modules/.bin/webpack --mode production --config test/webpack.example.config.js'
             }
         }
     });

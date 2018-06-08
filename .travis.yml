@@ -5,6 +5,7 @@ node_js:
   - 4
   - 6
   - 8
+  - 10
 env:
   - TARGET=test-inline
   - TARGET=test-coverage

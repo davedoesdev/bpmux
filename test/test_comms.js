@@ -10,6 +10,7 @@
 var path = require('path'),
     fs = require('fs'),
     util = require('util'),
+    stream = require('stream'),
     tmp = require('tmp'),
     async = require('async'),
     crypto = require('crypto'),
@@ -228,17 +229,23 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             }
         };
 
-        end_server_conn(server_conn, function ()
+        if (server_conn)
         {
-            server_conn = null;
-            check();
-        });
+            end_server_conn(server_conn, function ()
+            {
+                server_conn = null;
+                check();
+            });
+        }
 
-        end_client_conn(client_conn, function ()
+        if (client_conn)
         {
-            client_conn = null;
-            check();
-        });
+            end_client_conn(client_conn, function ()
+            {
+                client_conn = null;
+                check();
+            });
+        }
 
         for (i = 0; i < duplexes.length; i += 1)
         {
@@ -750,7 +757,6 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             n2 = 0,
             called = false,
             error_events;
-
         
         function onerr1(e)
         {
@@ -804,7 +810,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
     function unknown_message(sender, receiver, cb)
     {
-        receiver._mux.on('error', function (err)
+        receiver._mux.once('error', function (err)
         {
             expect(err.message).to.equal('short buffer length 1 < 5');
             cb();
@@ -908,13 +914,23 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
  
     function read_overflow(sender, receiver, cb)
     {
-        receiver._mux._in_stream._events.readable = [
-            function ()
+        if (receiver._mux._in_stream.prependOnceListener)
+        {
+            receiver._mux._in_stream.prependOnceListener('data', function ()
             {
                 receiver.unshift(make_buffer(receiver, 1));
-                receiver._mux._in_stream._events.readable.shift();
-            },
-            receiver._mux._in_stream._events.readable];
+            });
+        }
+        else
+        {
+            receiver._mux._in_stream._events.data = [
+                function ()
+                {
+                    receiver.unshift(make_buffer(receiver, 1));
+                    receiver._mux._in_stream._events.data.shift();
+                },
+                receiver._mux._in_stream._events.data];
+        }
 
         receiver.once('error', function (err)
         {
@@ -929,13 +945,23 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     {
         var size = 0;
 
-        receiver._mux._in_stream._events.readable = [
-            function ()
+        if (receiver._mux._in_stream.prependOnceListener)
+        {
+            receiver._mux._in_stream.prependOnceListener('data', function ()
             {
                 receiver.unshift(make_buffer(receiver, 1));
-                receiver._mux._in_stream._events.readable.shift();
-            },
-            receiver._mux._in_stream._events.readable];
+            });
+        }
+        else
+        {
+            receiver._mux._in_stream._events.data = [
+                function ()
+                {
+                    receiver.unshift(make_buffer(receiver, 1));
+                    receiver._mux._in_stream._events.data.shift();
+                },
+                receiver._mux._in_stream._events.data];
+        }
 
         receiver.on('end', function ()
         {
@@ -1055,6 +1081,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 {
                     expect(this.read()).to.equal(null);
                 });
+                expect(this.read()).to.equal(null);
             });
         });
 
@@ -1209,14 +1236,19 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             cb();
         });
 
-        receiver._mux._in_stream.on('readable', function ()
+        receiver._mux._in_stream.pipe(new stream.Writable(
         {
-            if (receiver._mux._reading_duplex)
+            write: function (data, encoding, cb)
             {
-                receiver._mux._reading_duplex.push(null);
+                if (receiver._mux._reading_duplex)
+                {
+                    receiver._mux._reading_duplex.push(null);
+                }
+                
+                cb();
             }
-        });
-
+        }));
+        
         sender.end('12345');
     }
 
@@ -1470,10 +1502,12 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
     function setup(n)
     {
-        function calln(description, f, max, not_both)
+        function calln(description, f, max, not_both, doit)
         {
             max = max || n;
             if (n > max) { return; }
+
+            doit = doit || it;
 
             var b = not_both ? function (x) { return x; } : both;
 
@@ -1491,13 +1525,13 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 return title;
             }
 
-            it(make_title(', client initiated'), function (cb)
+            doit(make_title(', client initiated'), function (cb)
             {
                 async.times(n, multiplex.call(
                         this, n, b(f), client_mux, server_mux), cb);
             });
 
-            it(make_title(', server initiated'), function (cb)
+            doit(make_title(', server initiated'), function (cb)
             {
                 async.times(n, multiplex.call(
                         this, n, b(f), server_mux, client_mux), cb);
@@ -1669,7 +1703,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
               1,
               true);
 
-        calln(new WithOptions('should detect Read overflow',
+        calln(new WithOptions('should detect read overflow',
                               {
                                   peer_multiplex_options: {
                                       highWaterMark: 100
@@ -2092,6 +2126,101 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         {
             duplex._send_handshake();
         }, 500);
+    });
+
+    it('should not send handshake after finished', function (cb)
+    {
+        var duplex = client_mux.multiplex(
+        {
+            _delay_handshake: true
+        });
+        csebemr(duplex);
+
+        client_mux.on('finish', function ()
+        {
+            duplex._send_handshake();
+        });
+
+        server_mux.on('handshake', function ()
+        {
+            cb(new Error('should not be called'));
+        });
+
+        end_server_conn(server_conn, function ()
+        {
+            server_conn = null;
+        });
+
+        end_client_conn(client_conn, function ()
+        {
+            client_conn = null;
+        });
+
+        setTimeout(cb, 1000);
+    });
+
+    it('should not send if already sending', function (cb)
+    {
+        var orig__send = client_mux.__send, n = 0, in_call = false;
+
+        client_mux.__send = function ()
+        {
+            expect(in_call).to.equal(false);
+            in_call = true;
+            n += 1;
+            if (n === 1)
+            {
+                this._send();
+            }
+
+            orig__send.call(this);
+            in_call = false;
+        };
+
+        server_mux.on('handshake', function (duplex)
+        {
+            csebemr(duplex);
+            cb();
+        });
+
+        csebemr(client_mux.multiplex());
+    });
+
+    it('should not reset duplex remote free', function (cb)
+    {
+        server_mux.on('handshake', function (duplex)
+        {
+            csebemr(duplex);
+            duplex.on('readable', function ()
+            {
+                var data = this.read();
+                if (data === null)
+                {
+                    return;
+                }
+                expect(data.toString()).to.equal('a');
+            });
+        });
+
+        var duplex = client_mux.multiplex();
+        csebemr(duplex);
+
+        var orig_write = client_mux._out_stream.write;
+
+        client_mux._out_stream.write = function ()
+        {
+            duplex._remote_free = 10;
+            duplex._set_remote_free = true;
+            return orig_write.apply(this, arguments);
+        };
+
+        duplex.write('a', function ()
+        {
+            expect(duplex._remote_free).to.equal(10);
+            cb();
+        });
+
+        duplex.end();
     });
 }
 
