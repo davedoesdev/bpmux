@@ -15,7 +15,11 @@ function setup(aho)
             net.createServer(
             {
                 allowHalfOpen: aho
-            }, conn_cb).listen(server_port, function ()
+            }, function (conn)
+            {
+                conn.setNoDelay();
+                conn_cb(conn);
+            }).listen(server_port, function ()
             {
                 cb(this);
             });
@@ -40,6 +44,7 @@ function setup(aho)
         {
             net.createConnection(server_port, function ()
             {
+                this.setNoDelay();
                 cb(this);
             });
         },

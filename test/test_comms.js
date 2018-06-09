@@ -564,7 +564,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         for (ci = 0; ci < chunks.length; ci += 1)
         {
-            chunks[ci] = make_buffer(sender, ci); //send_crypto.randomBytes(ci);
+            //chunks[ci] = make_buffer(sender, ci);
+            chunks[ci] = write_crypto.randomBytes(ci);
         }
 
         receiver.on('readable', function ()
@@ -1658,7 +1659,9 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         calln('should handle write backpressure',
               write_backpressure,
-              10);
+              10,
+              null,
+              it.only);
 
         calln('should handle flow mode',
               flow_mode);
