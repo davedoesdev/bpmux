@@ -8,6 +8,7 @@ Node stream multiplexing with back-pressure on each stream.
 - Each multiplexed stream's back-pressure is handled separately while respecting the carrier's capacity.
 - Unit tests with 100% coverage.
 - Tested with TCP streams and [Primus](https://github.com/primus/primus) (using [primus-backpressure](https://github.com/davedoesdev/primus-backpressure)) - works in the browser!
+  - For TCP streams you'll get better performance if you [disable Nagle](https://nodejs.org/dist/latest-v10.x/docs/api/net.html#net_socket_setnodelay_nodelay).
 - Browser unit tests using [webpack](http://webpack.github.io/) and [nwjs](http://nwjs.io/).
 
 The API is described [here](#api).
