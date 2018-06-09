@@ -1659,9 +1659,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         calln('should handle write backpressure',
               write_backpressure,
-              10,
-              null,
-              it.only);
+              10);
 
         calln('should handle flow mode',
               flow_mode);
