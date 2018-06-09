@@ -1017,6 +1017,14 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
     function wrap_sequence_numbers(sender, receiver, cb)
     {
+        if (sender._mux.carrier.setNoDelay)
+        {
+            // With Nagle disabled, we never get status messages where
+            // duplex._seq < seq. Probably the data gets assembled at the
+            // receiver so that when read is called the seq has already updated.
+            sender._mux.carrier.setNoDelay(false);
+        }
+
         sender.on('handshake', function ()
         {
             var msg = '';
