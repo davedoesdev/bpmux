@@ -15,6 +15,7 @@ var path = require('path'),
     async = require('async'),
     crypto = require('crypto'),
     chai = require('chai'),
+    frame = require('frame-stream'),
     expect = chai.expect,
     random_fname = path.join(__dirname, 'fixtures', 'random');
 
@@ -456,6 +457,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 count += data.length;
                 if (count === buf.length)
                 {
+                    expect(bufs.length).to.be.above(1);
                     expect(buffer_concat(receiver, bufs).toString()).to.equal(buf.toString());
                     cb();
                 }
@@ -467,6 +469,39 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         });
 
         sender.write(buf);
+    }
+
+    function frame_stream(sender, receiver, cb)
+    {
+        var write_crypto = get_crypto(sender),
+            buf = write_crypto.randomBytes(32 * 1024),
+            chunks = 0,
+            decode = frame.decode(),
+            encode = frame.encode();
+
+        decode.on('end', function ()
+        {
+            expect(chunks).to.equal(1);
+            cb();
+        });
+
+        decode.on('readable', function ()
+        {
+            while (true)
+            {
+                var data = this.read();
+                if (data === null)
+                {
+                    break;
+                }
+                chunks += 1;
+                expect(data.length).to.equal(buf.length);
+            }
+        });
+
+        receiver.pipe(decode);
+        encode.pipe(sender);
+        encode.end(buf);
     }
 
     function delay_status(sender, receiver, cb)
@@ -1661,6 +1696,9 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         calln('should write large buffer to multiplexed streams',
               large_buffer);
+
+        calln('should support frame-stream over multiplexed streams',
+              frame_stream);
 
         calln('should be able to delay status messages',
               delay_status);
