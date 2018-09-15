@@ -6,7 +6,8 @@ function doit()
                                 PrimusDuplex,
                                 BPMux,
                                 BundledBuffer,
-                                bundled_crypto);
+                                bundled_crypto,
+                                bundled_frame);
     }
     catch (ex)
     {

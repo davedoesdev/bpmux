@@ -9,10 +9,6 @@ env:
   - TARGET=test-inline
   - TARGET=test-coverage
   - TARGET=test-browser
-before_script:
-  # Node 8 / npm 5.6.0 has problems figuring out the version listed in
-  # package-lock.json is the same as the one we want so install it ourselves
-  - npm install temp@github:adam-lynch/node-temp#279c1350cb7e4f02515d91da9e35d39a40774016
 script:
   - export DISPLAY=:99.0
   - sh -e /etc/init.d/xvfb start

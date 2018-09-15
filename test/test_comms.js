@@ -63,7 +63,7 @@ function parse_handshake_data(buf)
 
 function test(ServerBPMux, make_server, end_server, end_server_conn,
               ClientBPMux, make_client_conn, end_client_conn,
-              ClientBuffer, client_crypto,
+              ClientBuffer, client_crypto, client_frame,
               coalesce_writes, fast)
 {
     var server,
@@ -290,6 +290,11 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         return mux.name === 'client' ? client_crypto : crypto;
     }
 
+    function get_frame(mux)
+    {
+        return mux.name === 'client' ? client_frame : frame;
+    }
+
     function multiplex(n, f, initiator_mux, responder_mux)
     {
         /*jshint validthis: true */
@@ -476,8 +481,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         var write_crypto = get_crypto(sender),
             buf = write_crypto.randomBytes(32 * 1024),
             chunks = 0,
-            decode = frame.decode(),
-            encode = frame.encode();
+            decode = get_frame(receiver).decode(),
+            encode = get_frame(sender).encode();
 
         decode.on('end', function ()
         {
@@ -2275,7 +2280,7 @@ module.exports = function(
         type,
         ServerBPMux, make_server, end_server, end_server_conn,
         ClientBPMux, make_client_conn, end_client_conn,
-        ClientBuffer, client_crypto,
+        ClientBuffer, client_crypto, client_frame,
         fast)
 {
     [ false, true ].forEach(function (coa)
@@ -2284,7 +2289,7 @@ module.exports = function(
         {
             test(ServerBPMux, make_server, end_server, end_server_conn,
                  ClientBPMux, make_client_conn, end_client_conn,
-                 ClientBuffer, client_crypto,
+                 ClientBuffer, client_crypto, client_frame,
                  coa, fast);
         });
     });

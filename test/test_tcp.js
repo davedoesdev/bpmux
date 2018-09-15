@@ -55,6 +55,7 @@ function setup(aho)
         },
         Buffer,
         require('crypto'),
+        require('frame-stream'),
         process.env.FAST);
 }
 

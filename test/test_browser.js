@@ -20,7 +20,8 @@ module.exports = function (BrowserPrimus, // will be using browser transport
                            BrowserPrimusDuplex,
                            BrowserBPMux,
                            BrowserBuffer,
-                           browser_crypto)
+                           browser_crypto,
+                           browser_frame)
 {
     var mocha = new Mocha(
     {
@@ -65,6 +66,7 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         },
         BrowserBuffer,
         browser_crypto,
+        browser_frame,
         true);
 
     console.log = function ()
