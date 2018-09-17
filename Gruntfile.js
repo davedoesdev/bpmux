@@ -81,6 +81,8 @@ module.exports = function (grunt)
                     'cp test/fixtures/webpack/bundle.js test/fixtures/nw',
                     'mkdir -p test/fixtures/nw/node_modules/fixtures',
                     'touch test/fixtures/nw/node_modules/fixtures/keep',
+                    'mkdir -p test/fixtures/nw/node_modules/certs',
+                    'cp test/certs/server.* test/fixtures/nw/node_modules/certs',
                     './node_modules/.bin/nwbuild --quiet -p linux64 test/fixtures/nw'
                 ].join('&&')
             },
