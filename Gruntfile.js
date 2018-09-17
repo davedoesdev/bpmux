@@ -100,6 +100,10 @@ module.exports = function (grunt)
 
             bundle_example: {
                 command: './node_modules/.bin/webpack --mode production --config test/webpack.example.config.js'
+            },
+
+            certs: {
+                command: 'if [ ! -f test/certs/server.crt ]; then ./test/certs/make_ca_cert.sh && ./test/certs/make_server_cert.sh; fi'
             }
         }
     });
@@ -117,6 +121,7 @@ module.exports = function (grunt)
     grunt.registerTask('test-examples', [ 'shell:bundle_example',
                                           'mochaTest:examples' ]);
     grunt.registerTask('test-browser', [ 'save-primus',
+                                         'shell:certs',
                                          'shell:bundle',
                                          'shell:nw_build',
                                          'shell:bpmux_test' ]);
