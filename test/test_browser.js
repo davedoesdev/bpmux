@@ -57,7 +57,7 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         function (cb)
         {
             cb(new BrowserPrimusDuplex(
-                    new BrowserPrimus('http://localhost:' + 7000)));
+                    new BrowserPrimus('http://localhost:' + server_port)));
         },
         function (conn, cb)
         {

@@ -1,5 +1,6 @@
 {
   "name": "bpmux-test",
   "version" : "0.0.1",
-  "main": "loader.html"
+  "main": "loader.html",
+  "chromium-args": "--ignore-certificate-errors"
 }
