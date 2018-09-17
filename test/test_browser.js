@@ -8,6 +8,8 @@ require('mocha/lib/utils').isString = function (obj)
 };
 
 var net = require('net'),
+    fs = require('fs'),
+    path = require('path'),
     util = require('util'),
     os = require('os'),
     Mocha = require('mocha'),
@@ -39,7 +41,12 @@ module.exports = function (BrowserPrimus, // will be using browser transport
             cb(Primus.createServer(function (spark)
             {
                 conn_cb(new PrimusDuplex(spark));
-            }, { port: server_port, iknowhttpsisbetter: true }));
+            },
+            {
+                port: server_port,
+                key: fs.readFileSync(path.join(__dirname, 'certs', 'server.key')),
+                cert: fs.readFileSync(path.join(__dirname, 'certs', 'server.crt'))
+            }));
         },
         function (server, cb)
         {
@@ -57,7 +64,7 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         function (cb)
         {
             cb(new BrowserPrimusDuplex(
-                    new BrowserPrimus('http://localhost:' + server_port)));
+                    new BrowserPrimus('https://localhost:' + server_port)));
         },
         function (conn, cb)
         {
