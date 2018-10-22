@@ -1,6 +1,6 @@
+/*eslint-env node */
 /*global describe: false,
          it: false */
-/*jslint node: true, nomen: true */
 "use strict";
 
 var BPMux = require('..').BPMux,
@@ -21,7 +21,10 @@ describe('channel number full', function ()
 {
     it('should throw a full exception when maximum number of duplexes exceeded', function (cb)
     {
-        var mux = new BPMux(dummy_carrier),
+        var mux = new BPMux(dummy_carrier,
+            {
+                keep_alive: false
+            }),
             full_emitted = false;
 
         mux.on('full', function ()
@@ -50,7 +53,11 @@ describe('channel number full', function ()
 
     it('should throw a full exception when maximum number of open duplexes exceeded', function (cb)
     {
-        var mux = new BPMux(dummy_carrier, { max_open: 3 }),
+        var mux = new BPMux(dummy_carrier,
+            {
+                max_open: 3,
+                keep_alive: false
+            }),
             full_emitted = false;
 
         mux.on('full', function ()

@@ -1,10 +1,10 @@
+/*eslint-env node */
 /*global before: false,
          after: false,
          beforeEach: false,
          afterEach: false,
          it : false,
          describe: false */
-/*jslint node: true, nomen: true */
 "use strict";
 
 var path = require('path'),
@@ -80,7 +80,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             parse_handshake_data: parse_handshake_data,
             peer_multiplex_options: {
                 highWaterMark: fast ? 2048 : 16384
-            }
+            },
+            keep_alive: 1000
         };
 
     function csebemr(duplex)
@@ -117,7 +118,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             {
                 expect(this._mux.duplexes.has(this._chan)).to.equal(false);
                 this._mux._chan = this._chan;
-                if (!this._mux.carrier._writableState.finished)
+                if (!this._mux.carrier._writableState.finished &&
+                    !this._mux.carrier._readableState.ended)
                 {
                     var d = this._mux.multiplex({ _delay_handshake: true });
                     expect(d._chan).to.equal(this._chan);
@@ -187,7 +189,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         }, function (s)
         {
             server = s;
-            make_client_conn(function (c)
+            make_client_conn(s, function (c)
             {
                 client_conn = c;
                 client_mux = new ClientBPMux(client_conn, options);
@@ -277,7 +279,11 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     
     function make_buffer(mux, x)
     {
-        return mux.name === 'client' ? new ClientBuffer(x) : new Buffer(x);
+        if (typeof x === 'number')
+        {
+            return mux.name === 'client' ? ClientBuffer.alloc(x) : Buffer.alloc(x);
+        }
+        return mux.name === 'client' ? ClientBuffer.from(x) : Buffer.from(x);
     }
 
     function buffer_concat(mux, x)
@@ -345,14 +351,14 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             initiator_duplex = initiator_mux.multiplex(
                 title instanceof WithOptions ?
-                util._extend(
-                {
-                    handshake_data: initiator_buf
-                }, title.multiplex_options || {}) :
-                {
-                    handshake_data: initiator_buf,
-                    highWaterMark: fast ? 2048 : 16384
-                });
+                    util._extend(
+                    {
+                        handshake_data: initiator_buf
+                    }, title.multiplex_options || {}) :
+                    {
+                        handshake_data: initiator_buf,
+                        highWaterMark: fast ? 2048 : 16384
+                    });
 
             expect(initiator_duplex._chan).to.equal(i);
             add_duplex(initiator_duplex);
@@ -360,10 +366,10 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             if ((!wait_for_handshake) || responder_duplex)
             {
                 f(initiator_duplex, wait_for_handshake ? responder_duplex :
-                {
-                    _mux: responder_mux,
-                    name: responder_mux.name
-                }, cb);
+                    {
+                        _mux: responder_mux,
+                        name: responder_mux.name
+                    }, cb);
             }
         };
     }
@@ -400,7 +406,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         {
             var buf;
 
-            while (true)
+            while (true) // eslint-disable-line no-constant-condition
             {
                 buf = this.read();
                 if (buf === null) { break; }
@@ -451,7 +457,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         receiver.on('readable', function ()
         {
-            while (true)
+            while (true) // eslint-disable-line no-constant-condition
             {
                 var data = this.read();
                 if (data === null)
@@ -492,7 +498,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         decode.on('readable', function ()
         {
-            while (true)
+            while (true) // eslint-disable-line no-constant-condition
             {
                 var data = this.read();
                 if (data === null)
@@ -533,7 +539,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             {
                 var buf;
 
-                while (true)
+                while (true) // eslint-disable-line no-constant-condition
                 {
                     buf = this.read(null, false);
 
@@ -558,7 +564,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         {
             var buf;
 
-            while (true)
+            while (true) // eslint-disable-line no-constant-condition
             {
                 buf = this.read(null, false);
 
@@ -612,7 +618,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         {
             var buf;
 
-            while (true)
+            while (true) // eslint-disable-line no-constant-condition
             {
                 buf = this.read(j);
 
@@ -1015,7 +1021,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         {
             var data;
 
-            while (true)
+            while (true) // eslint-disable-line no-constant-condition
             {
                 data = this.read();
 
@@ -1080,14 +1086,15 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             sender.on('readable', drain);
             
-            sender.write('h'); // test remote_free calc after wrap
-                               // (local seq will be less than remote)
+            // test remote_free calc after wrap
+            // (local seq will be less than remote)
+            sender.write('h');
             sender.end('ello there');
 
             receiver.on('readable', function ()
             {
                 var data;
-                while (true)
+                while (true) // eslint-disable-line no-constant-condition
                 {
                     data = this.read();
                     if (data === null)
@@ -1220,13 +1227,12 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     {
         var send_buf = get_crypto(sender).randomBytes(50 * 1024),
             receive_bufs = [],
-            drain_called = false,
-            out_stream_drain_called = false;
+            drain_called = false;
 
         receiver.on('readable', function ()
         {
             var data;
-            while (true)
+            while (true) // eslint-disable-line no-constant-condition
             {
                 data = this.read();
                 if (data === null)
@@ -1235,7 +1241,6 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 }
                 receive_bufs.push(data);
             }
-
         });
 
         receiver.on('end', function ()
@@ -1245,16 +1250,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             cb();
         });
 
-        sender._mux._out_stream.setMaxListeners(0);
-        sender._mux._out_stream.on('drain', function ()
-        {
-            out_stream_drain_called = true;
-
-        });
-
         sender.on('drain', function ()
         {
-            expect(out_stream_drain_called).to.equal(true);
             drain_called = true;
             this.end();
         });
@@ -1271,7 +1268,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         receiver.on('readable', function ()
         {
             var data;
-            while (true)
+            while (true) // eslint-disable-line no-constant-condition
             {
                 data = this.read();
                 if (data === null) { return; }
@@ -1402,7 +1399,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         {
             var data;
 
-            while (true)
+            while (true) // eslint-disable-line no-constant-condition
             {
                 data = receiver.read();
                 if (data === null)
@@ -1543,10 +1540,45 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         receiver.on('readable', function ()
         {
             while (this.read() !== null)
-            {
+            { // eslint-disable-line no-empty
             }
         });
         sender.end();
+    }
+
+    function keep_alive(sender, receiver, cb)
+    {
+        var count = 0;
+
+        function check()
+        {
+            if (++count === 2)
+            {
+                cb();
+            }
+        }
+
+        sender._mux.once('keep_alive', check);
+        receiver._mux.once('keep_alive', check);
+    }
+
+    function keep_alive_disabled(sender, receiver, cb)
+    {
+        var count = 0;
+
+        function ka()
+        {
+            ++count;
+        }
+
+        sender._mux.once('keep_alive', ka);
+        receiver._mux.once('keep_alive', ka);
+
+        setTimeout(function ()
+        {
+            expect(count).to.equal(0);
+            cb();
+        }, 2000);
     }
 
     function setup(n)
@@ -1816,6 +1848,17 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
               end_without_finish,
               1,
               true);
+
+        calln('should send keep-alive messages',
+              keep_alive,
+              1);
+
+        calln(new WithOptions('should be able to disable keep-alive',
+                              {
+                                  keep_alive: false
+                              }),
+              keep_alive_disabled,
+              1);
     }
 
     setup(1);
@@ -1848,7 +1891,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             expect(duplex._handshake_sent).to.equal(false);
             expect(delay_handshake).not.to.equal(null);
             csebemr(duplex);
-            delay_handshake()(new Buffer('bar'));
+            delay_handshake()(Buffer.from('bar'));
         });
     });
 
@@ -2098,7 +2141,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             csebemr(client_mux.multiplex(
             {
-                handshake_data: new Buffer(1024 * 1024)
+                handshake_data: Buffer.alloc(1024 * 1024)
             }));
         });
     });
@@ -2119,7 +2162,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             duplex.on('readable', function ()
             {
-                while (true)
+                while (true) // eslint-disable-line no-constant-condition
                 {
                     var data = this.read();
                     if (data === null) { break; }
@@ -2157,7 +2200,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             duplex.on('readable', function ()
             {
-                while (true)
+                while (true) // eslint-disable-line no-constant-condition
                 {
                     var data = this.read();
                     if (data === null) { break; }

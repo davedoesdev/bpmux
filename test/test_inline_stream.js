@@ -1,7 +1,7 @@
+/*eslint-env node */
 /*global describe: false,
          beforeEach: false,
          it: false */
-/*jshint node: true */
 "use strict";
 
 var BPMux = require('..').BPMux,
@@ -9,8 +9,7 @@ var BPMux = require('..').BPMux,
     expect = chai.expect,
     stream = require('stream'),
     util = require('util'),
-    Duplex = stream.Duplex,
-    PassThrough = stream.PassThrough;
+    Duplex = stream.Duplex;
 
 function RightDuplex(left)
 {
@@ -107,13 +106,13 @@ describe('inline stream', function ()
 
                 rmux.multiplex(
                 {
-                    handshake_data: new Buffer('right hs')
+                    handshake_data: Buffer.from('right hs')
                 }).end('right data');
             });
 
             duplex.on('readable', function ()
             {
-                while (true)
+                while (true) // eslint-disable-line no-constant-condition
                 {
                     var data = this.read();
                     if (data === null)
@@ -127,7 +126,7 @@ describe('inline stream', function ()
 
         lmux.multiplex(
         {
-            handshake_data: new Buffer('left hs')
+            handshake_data: Buffer.from('left hs')
         }).end('left data');
         
         lmux.on('handshake', function (duplex, hsdata, delay)
@@ -150,7 +149,7 @@ describe('inline stream', function ()
 
             duplex.on('readable', function ()
             {
-                while (true)
+                while (true) // eslint-disable-line no-constant-condition
                 {
                     var data = this.read();
                     if (data === null)
@@ -173,7 +172,7 @@ describe('inline stream', function ()
 
             duplex.on('readable', function ()
             {
-                while (true)
+                while (true) // eslint-disable-line no-constant-condition
                 {
                     var data = this.read();
                     if (data === null) { break; }
@@ -181,23 +180,23 @@ describe('inline stream', function ()
                 }
             });
 
-            this.end(new Buffer([2]));
+            this.end(Buffer.from([2]));
         });
 
         duplex.on('end', cb);
 
         lmux.on('handshake', function (duplex)
         {
-            duplex.write(new Buffer([1]));
+            duplex.write(Buffer.from([1]));
 
             duplex.on('readable', function ()
             {
-                while (true)
+                while (true) // eslint-disable-line no-constant-condition
                 {
                     var data = this.read();
                     if (data === null) { break; }
                     expect(data[0]).to.equal(2);
-                    this.end(new Buffer([3]));
+                    this.end(Buffer.from([3]));
                 }
             });
         });
@@ -208,7 +207,7 @@ describe('inline stream', function ()
         // right mux is intially in sync mode so need to send some data
         var control = lmux.multiplex();
 
-        lmux.on('handshake', function (duplex, hdata, delay)
+        lmux.on('handshake', function (duplex)
         {
             if (duplex !== control)
             {
@@ -295,7 +294,7 @@ describe('inline stream', function ()
 
             duplex.on('readable', function ()
             {
-                while (true)
+                while (true) // eslint-disable-line no-constant-condition
                 {
                     var data = this.read();
                     if (!data) { return; }
@@ -333,7 +332,7 @@ describe('inline stream', function ()
 
             duplex.on('readable', function ()
             {
-                while (true)
+                while (true) // eslint-disable-line no-constant-condition
                 {
                     var data = this.read();
                     if (!data) { return; }
@@ -408,7 +407,7 @@ describe('inline stream', function ()
 
         function check()
         {
-            if (lcomplete && lcomplete2 && rcomplete && rcomplete2 && rcomplete3)
+            if (lcomplete && lcomplete2 && rcomplete && rcomplete2 && rcomplete3 && rcomplete4)
             {
                 cb();
             }
@@ -516,7 +515,7 @@ describe('inline stream', function ()
     {
         it('should support sending large buffers', function (cb)
         {
-            var buf = new Buffer(128 * 1024);
+            var buf = Buffer.alloc(128 * 1024);
             buf.fill('a');
 
             rmux.once('handshake', function (duplex)
@@ -525,7 +524,7 @@ describe('inline stream', function ()
 
                 duplex.on('readable', function ()
                 {
-                    while (true)
+                    while (true) // eslint-disable-line no-constant-condition
                     {
                         var data = this.read();
                         if (data === null)
@@ -549,7 +548,7 @@ describe('inline stream', function ()
         it('should support sending large buffers with delayed handshake',
         function (cb)
         {
-            var buf = new Buffer(100 * 1024);
+            var buf = Buffer.alloc(100 * 1024);
             buf.fill('a');
 
             rmux.on('handshake', function (duplex, hsdata, delay)
@@ -560,7 +559,7 @@ describe('inline stream', function ()
 
                 duplex.on('readable', function ()
                 {
-                    while (true)
+                    while (true) // eslint-disable-line no-constant-condition
                     {
                         var data = this.read();
                         if (data === null)

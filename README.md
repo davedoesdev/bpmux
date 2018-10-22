@@ -6,9 +6,11 @@ Node stream multiplexing with back-pressure on each stream.
 - Exerts back-pressure on each multiplexed stream and the underlying carrier stream.
 - Each multiplexed stream's back-pressure is handled separately while respecting the carrier's capacity.
 - Unit tests with 100% coverage.
-- Tested with TCP streams and [Primus](https://github.com/primus/primus) (using [primus-backpressure](https://github.com/davedoesdev/primus-backpressure)) - works in the browser!
-  - For TCP streams you'll get better performance if you [disable Nagle](https://nodejs.org/dist/latest-v10.x/docs/api/net.html#net_socket_setnodelay_nodelay).
-- Browser unit tests using [webpack](http://webpack.github.io/) and [nwjs](http://nwjs.io/).
+- Tested with TCP streams. You'll get better performance if you [disable Nagle](https://nodejs.org/dist/latest-v10.x/docs/api/net.html#net_socket_setnodelay_nodelay).
+- Works in the browser!
+  - Tested with [Primus](https://github.com/primus/primus) (using [primus-backpressure](https://github.com/davedoesdev/primus-backpressure)).
+  - Tested with HTTP/2 streams (using [browser-http2-duplex](https://github.com/davedoesdev/browser-http2-duplex)). Also tested Node-to-Node using `http2`.
+  - Browser unit tests using [webpack](http://webpack.github.io/) and [nwjs](http://nwjs.io/).
 
 The API is described [here](#api).
 
@@ -103,7 +105,7 @@ http.createServer(function (req, res)
             var buf = crypto.randomBytes(10 * 1024),
                 buf_stream = new stream.PassThrough(),
                 bufs = [],
-                duplex = mux.multiplex({ handshake_data: new Buffer([n]) });
+                duplex = mux.multiplex({ handshake_data: Buffer.from([n]) });
 
             buf_stream.end(buf);
             buf_stream.pipe(duplex);
@@ -250,6 +252,7 @@ grunt lint
 - <a name="toc_bpmuxeventsfinish"></a>[BPMux.events.finish](#bpmuxeventsfinish)
 - <a name="toc_bpmuxeventsfull"></a>[BPMux.events.full](#bpmuxeventsfull)
 - <a name="toc_bpmuxeventsremovedduplex"></a>[BPMux.events.removed](#bpmuxeventsremovedduplex)
+- <a name="toc_bpmuxeventskeep_alive"></a>[BPMux.events.keep_alive](#bpmuxeventskeep_alive)
 
 ## BPMux(carrier, [options])
 
@@ -274,6 +277,8 @@ grunt lint
   - `{Integer} [max_open]` Maximum number of multiplexed streams that can be open at a time. Defaults to 0 (no maximum).
 
   - `{Integer} [max_header_size]` `BPMux` adds a control header to each message it sends, which the receiver reads into memory. The header is of variable length &mdash; for example, handshake messages contain handshake data which can be supplied by the application. `max_header_size` is the maximum number of header bytes to read into memory. If a larger header is received, `BPMux` emits an `error` event. Defaults to 0 (no limit).
+
+  - `{Integer|false}` `keep_alive` Send a single byte keep-alive message every N milliseconds. Defaults to 30000 (30 seconds). Pass `false` to disable.
 
 <sub>Go: [TOC](#tableofcontents)</sub>
 
@@ -396,6 +401,15 @@ A `BPMux` object emits a `removed` event when a multiplexed stream has closed
 **Parameters:**
 
 - `{Duplex} duplex` The stream which has closed.
+
+<sub>Go: [TOC](#tableofcontents) | [BPMux.events](#toc_bpmuxevents)</sub>
+
+## BPMux.events.keep_alive()
+
+> `keep_alive` event
+
+A `BPMux` object emits a `keep_alive` event when it receives a keep-alive
+message from its peer.
 
 <sub>Go: [TOC](#tableofcontents) | [BPMux.events](#toc_bpmuxevents)</sub>
 

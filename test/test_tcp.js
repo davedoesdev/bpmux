@@ -1,4 +1,4 @@
-/*jslint node: true */
+/*eslint-env node, mocha */
 "use strict";
 
 var net = require('net'),
@@ -40,7 +40,7 @@ function setup(aho)
             });
         },
         BPMux,
-        function (cb)
+        function (server, cb)
         {
             net.createConnection(server_port, function ()
             {

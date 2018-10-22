@@ -1,5 +1,6 @@
+/*eslint-env node */
+/*eslint-disable no-unused-vars */
 /*global BPMux: false */
-/*jslint node: true, unparam: true */
 "use strict";
 /**
 `peer_multiplex` event
@@ -79,3 +80,11 @@ A `BPMux` object emits a `removed` event when a multiplexed stream has closed
 @param {Duplex} duplex The stream which has closed.
 */
 BPMux.events.removed = function (duplex) { return undefined; };
+
+/**
+`keep_alive` event
+
+A `BPMux` object emits a `keep_alive` event when it receives a keep-alive
+message from its peer.
+*/
+BPMux.events.keep_alive = function () { return undefined; };

@@ -1,29 +1,33 @@
-/*jslint node: true */
+/*eslint-env node */
 "use strict";
 
 // Enable passing options in title (WithOptions in test/test_comms.js)
 require('mocha/lib/utils').isString = function (obj)
 {
-    return true;
+    return typeof obj === 'string' ||
+           obj.constructor.name == 'WithOptions';
 };
 
-var net = require('net'),
-    fs = require('fs'),
+var fs = require('fs'),
     path = require('path'),
     util = require('util'),
     os = require('os'),
+    http2 = require('http2'),
     Mocha = require('mocha'),
     Primus = require('primus'),
     PrimusDuplex = require('primus-backpressure').PrimusDuplex,
+    make_http2_duplex_server = require('http2-duplex').default,
     BPMux = require('bpmux').BPMux,
     server_port = 7000;
 
 module.exports = function (BrowserPrimus, // will be using browser transport
                            BrowserPrimusDuplex,
+                           make_client_http2_duplex,
                            BrowserBPMux,
                            BrowserBuffer,
                            browser_crypto,
-                           browser_frame)
+                           browser_frame,
+                           cb)
 {
     var mocha = new Mocha(
     {
@@ -61,7 +65,7 @@ module.exports = function (BrowserPrimus, // will be using browser transport
             });
         },
         BrowserBPMux,
-        function (cb)
+        function (server, cb)
         {
             cb(new BrowserPrimusDuplex(
                     new BrowserPrimus('https://localhost:' + server_port)));
@@ -76,19 +80,73 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         browser_frame,
         true);
 
-    console.log = function ()
+    require('test_comms')(
+        'http2-duplex',
+        BPMux,
+        async function (conn_cb, cb)
+        {
+            const http2_server = http2.createSecureServer(
+            {
+                key: fs.readFileSync(path.join(__dirname, 'certs', 'server.key')),
+                cert: fs.readFileSync(path.join(__dirname, 'certs', 'server.crt'))
+            });
+
+            const http2_duplex_server = await make_http2_duplex_server(
+                http2_server,
+                '/test'
+            );
+
+            http2_duplex_server.http2_server = http2_server;
+            http2_duplex_server.on('duplex', conn_cb);
+
+            http2_server.listen(server_port, function ()
+            {
+                cb(http2_duplex_server);
+            });
+        },
+        async function (http2_duplex_server, cb)
+        {
+            await http2_duplex_server.close();
+            http2_duplex_server.http2_server.close(cb);
+        },
+        function (conn, cb)
+        {
+            conn.on('end', function ()
+            {
+                this.end();
+                cb();
+            });
+        },
+        BrowserBPMux,
+        async function (server, cb)
+        {
+            const url = 'https://localhost:' + server_port + '/test';
+            const duplex = await make_client_http2_duplex(url);
+            cb(duplex);
+        },
+        function (conn, cb)
+        {
+            conn.on('end', cb);
+            conn.end();
+        },
+        BrowserBuffer,
+        browser_crypto,
+        browser_frame,
+        true);
+
+    console.log = function () // eslint-disable-line no-console
     {
         process.stdout.write(util.format.apply(this, arguments));
         process.stdout.write(os.EOL);
     };
 
-    console.error = function ()
+    console.error = function () // eslint-disable-line no-console
     {
         process.stderr.write(util.format.apply(this, arguments));
         process.stderr.write(os.EOL);
     };
 
-    console.trace = function trace()
+    console.trace = function trace() // eslint-disable-line no-console
     {
         var err = new Error();
         err.name = 'Trace';
@@ -99,12 +157,6 @@ module.exports = function (BrowserPrimus, // will be using browser transport
 
     mocha.run(function (failures)
     {
-        if (failures)
-        {
-            return process.exit(failures);
-        }
-
-        /*global window */
-        window.require('nw.gui').App.quit();
+        cb(failures ? new Error('failed') : null);
     });
 };

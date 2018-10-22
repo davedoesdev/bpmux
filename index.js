@@ -7,9 +7,11 @@ Node stream multiplexing with back-pressure on each stream.
 - Exerts back-pressure on each multiplexed stream and the underlying carrier stream.
 - Each multiplexed stream's back-pressure is handled separately while respecting the carrier's capacity.
 - Unit tests with 100% coverage.
-- Tested with TCP streams and [Primus](https://github.com/primus/primus) (using [primus-backpressure](https://github.com/davedoesdev/primus-backpressure)) - works in the browser!
-  - For TCP streams you'll get better performance if you [disable Nagle](https://nodejs.org/dist/latest-v10.x/docs/api/net.html#net_socket_setnodelay_nodelay).
-- Browser unit tests using [webpack](http://webpack.github.io/) and [nwjs](http://nwjs.io/).
+- Tested with TCP streams. You'll get better performance if you [disable Nagle](https://nodejs.org/dist/latest-v10.x/docs/api/net.html#net_socket_setnodelay_nodelay).
+- Works in the browser!
+  - Tested with [Primus](https://github.com/primus/primus) (using [primus-backpressure](https://github.com/davedoesdev/primus-backpressure)).
+  - Tested with HTTP/2 streams (using [browser-http2-duplex](https://github.com/davedoesdev/browser-http2-duplex)). Also tested Node-to-Node using `http2`.
+  - Browser unit tests using [webpack](http://webpack.github.io/) and [nwjs](http://nwjs.io/).
 
 The API is described [here](#api).
 
@@ -104,7 +106,7 @@ http.createServer(function (req, res)
             var buf = crypto.randomBytes(10 * 1024),
                 buf_stream = new stream.PassThrough(),
                 bufs = [],
-                duplex = mux.multiplex({ handshake_data: new Buffer([n]) });
+                duplex = mux.multiplex({ handshake_data: Buffer.from([n]) });
 
             buf_stream.end(buf);
             buf_stream.pipe(duplex);
@@ -239,7 +241,7 @@ grunt lint
 
 # API
 */
-/*jslint node: true, nomen: true, unparam: true */
+/*eslint-env node */
 'use strict';
 
 var util = require('util'),
@@ -255,17 +257,21 @@ var util = require('util'),
     TYPE_FINISHED_STATUS = 3,
     TYPE_DATA = 4,
     TYPE_PRE_HANDSHAKE = 5,
-    TYPE_ERROR_END = 6;
+    TYPE_ERROR_END = 6,
+    TYPE_KEEP_ALIVE = 7;
 
 function BPDuplex(options, mux, chan)
 {
     Duplex.call(this, options);
 
-    options = options || {};
+    options = Object.assign(
+    {
+        max_write_size: 0
+    }, options);
 
     this._mux = mux;
     this._chan = chan;
-    this._max_write_size = options.max_write_size || 0;
+    this._max_write_size = options.max_write_size;
     this._check_read_overflow = options.check_read_overflow !== false;
     this._seq = 0;
     this._remote_free = 0;
@@ -323,7 +329,7 @@ BPDuplex.prototype.get_channel = function ()
 
 BPDuplex.prototype._send_handshake = function (handshake_data)
 {
-    this._mux._send_handshake(this, handshake_data || new Buffer(0));
+    this._mux._send_handshake(this, handshake_data || Buffer.alloc(0));
 };
 
 BPDuplex.prototype._read = function () { return undefined; };
@@ -382,16 +388,23 @@ Constructor for a `BPMux` object which multiplexes more than one [`stream.Duplex
 - `{Integer} [max_open]` Maximum number of multiplexed streams that can be open at a time. Defaults to 0 (no maximum).
 
 - `{Integer} [max_header_size]` `BPMux` adds a control header to each message it sends, which the receiver reads into memory. The header is of variable length &mdash; for example, handshake messages contain handshake data which can be supplied by the application. `max_header_size` is the maximum number of header bytes to read into memory. If a larger header is received, `BPMux` emits an `error` event. Defaults to 0 (no limit).
+
+- `{Integer|false}` `keep_alive` Send a single byte keep-alive message every N milliseconds. Defaults to 30000 (30 seconds). Pass `false` to disable.
 */
 function BPMux(carrier, options)
 {
     EventEmitter.call(this, options);
 
-    options = options || {};
+    options = Object.assign(
+    {
+        max_open: 0,
+        max_header_size: 0,
+        keep_alive: 30 * 1000
+    }, options);
 
     this._max_duplexes = Math.pow(2, 31);
-    this._max_open = options.max_open || 0;
-    this._max_header_size = options.max_header_size || 0;
+    this._max_open = options.max_open;
+    this._max_header_size = options.max_header_size;
     this.duplexes = new Map();
     this._chan = 0;
     this._chan_offset = options.high_channels ? this._max_duplexes : 0;
@@ -406,6 +419,7 @@ function BPMux(carrier, options)
     this.carrier = carrier;
     this._sending = false;
     this._send_requested = false;
+    this._keep_alive_id = null;
 
     this._out_stream = frame.encode(options);
 
@@ -423,8 +437,7 @@ function BPMux(carrier, options)
 
     this._out_stream.pipe(carrier);
 
-    this._in_stream = frame.decode(util._extend(util._extend(
-        {}, options),
+    this._in_stream = frame.decode(Object.assign({}, options,
         {
             unbuffered: true
         }));
@@ -436,6 +449,8 @@ function BPMux(carrier, options)
     {
         if (ths._finished) { return; }
         ths._finished = true;
+
+        clearInterval(ths._keep_alive_id);
 
         for (var duplex of ths.duplexes.values())
         {
@@ -554,6 +569,14 @@ function BPMux(carrier, options)
             cb();
         }
     }));
+
+    if (options.keep_alive !== false)
+    {
+        this._keep_alive_id = setInterval(function ()
+        {
+            ths._send_keep_alive();
+        }, options.keep_alive);
+    }
 }
 
 util.inherits(BPMux, EventEmitter);
@@ -571,6 +594,11 @@ BPMux.prototype._check_buffer = function (buf, size)
 
 BPMux.prototype._process_header = function (buf)
 {
+    if ((buf.length > 0) && (buf[0] === TYPE_KEEP_ALIVE))
+    {
+        return this.emit('keep_alive');
+    }
+
     if (!this._check_buffer(buf, 5)) { return; }
 
     var ths = this,
@@ -598,7 +626,7 @@ BPMux.prototype._process_header = function (buf)
         seq = buf.length === 13 ? buf.readUInt32BE(9, true) : 0;
 
         free = duplex._max_write_size > 0 ?
-                Math.min(free, duplex._max_write_size) : free;
+            Math.min(free, duplex._max_write_size) : free;
 
         duplex._remote_free = seq + free - duplex._seq;
 
@@ -680,13 +708,13 @@ BPMux.prototype._process_header = function (buf)
             {
                 free = buf.readUInt32BE(5, true);
                 duplex._remote_free = duplex._max_write_size > 0 ?
-                        Math.min(free, duplex._max_write_size) : free;
+                    Math.min(free, duplex._max_write_size) : free;
                 duplex._set_remote_free = true;
             }
             duplex._handshake_received = true;
             handshake_data = this._parse_handshake_data ?
-                    this._parse_handshake_data(buf.slice(9)) :
-                    buf.slice(9);
+                this._parse_handshake_data(buf.slice(9)) :
+                buf.slice(9);
             dhs = duplex._handshake_sent ? null : delay_handshake;
             this.emit('handshake', duplex, handshake_data, dhs);
             duplex.emit('handshake', handshake_data, dhs);
@@ -736,11 +764,23 @@ BPMux.prototype._remove = function (duplex)
     }
 };
 
+BPMux.prototype._send_keep_alive = function ()
+{
+    // Note: Keep-alive messages are sent regardless of remote_free
+    // (if the remove peer isn't reading any of its multiplexed streams,
+    // we still want to keep the underlying connection alive).
+
+    var buf = Buffer.alloc(1);
+    buf.writeUInt8(TYPE_KEEP_ALIVE, 0, true);
+
+    this._out_stream.write(buf);
+};
+
 BPMux.prototype._send_end = function (duplex)
 {
     if (this._finished) { return; }
 
-    var buf = new Buffer(1 + 4);
+    var buf = Buffer.alloc(1 + 4);
 
     buf.writeUInt8(duplex._error_end ? TYPE_ERROR_END : TYPE_END, 0, true);
     buf.writeUInt32BE(duplex._chan, 1, true);
@@ -760,7 +800,7 @@ BPMux.prototype._send_handshake = function (duplex, handshake_data)
         size += handshake_data.length;
     }
 
-    buf = new Buffer(size);
+    buf = Buffer.alloc(size);
 
     buf.writeUInt8(handshake_data ? TYPE_HANDSHAKE : TYPE_PRE_HANDSHAKE, 0, true);
     buf.writeUInt32BE(duplex._chan, 1, true);
@@ -825,7 +865,7 @@ BPMux.prototype._send_status = function (duplex)
         type = TYPE_STATUS;
     }
 
-    buf = new Buffer(1 + 4 + 4 + duplex._remote_seq.length);
+    buf = Buffer.alloc(1 + 4 + 4 + duplex._remote_seq.length);
     buf.writeUInt8(type, 0, true);
     buf.writeUInt32BE(duplex._chan, 1, true);
     buf.writeUInt32BE(free, 5, true);
@@ -872,7 +912,7 @@ BPMux.prototype.__send = function ()
     function write_output(info)
     {
         var size = Math.min(info.size, Math.max(Math.floor(space / n), 1)),
-            buf = new Buffer(1 + 4 + 4),
+            buf = Buffer.alloc(1 + 4 + 4),
             buf2 = info.duplex._data.slice(info.duplex._index, info.duplex._index + size),
             cb;
 
@@ -907,7 +947,7 @@ BPMux.prototype.__send = function ()
         n -= 1;
     }
 
-    while (true)
+    while (true) // eslint-disable-line no-constant-condition
     {
         space = this._out_stream._writableState.highWaterMark - this._out_stream._writableState.length;
         output = [];

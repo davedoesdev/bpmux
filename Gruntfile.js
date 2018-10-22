@@ -1,6 +1,4 @@
-/*global timeout: false,
-         browser_timeout: false */
-/*jslint node: true, nomen: true */
+/*eslint-env node */
 "use strict";
 
 var path = require('path');
@@ -8,18 +6,19 @@ var path = require('path');
 // Enable passing options in title (WithOptions in test/test_comms.js)
 require('mocha/lib/utils').isString = function (obj)
 {
-    return true;
+    return typeof obj === 'string' ||
+           obj.constructor.name == 'WithOptions';
 };
 
 module.exports = function (grunt)
 {
     grunt.initConfig(
     {
-        jshint: {
-            src: [ '*.js', 'test/*.js' ],
-            options: {
-                esversion: 6
-            }
+        eslint: {
+            target: [
+                '*.js',
+                'test/*.js'
+            ]
         },
 
         env: {
@@ -30,9 +29,12 @@ module.exports = function (grunt)
 
         mochaTest: {
             default: {
-                src: [ 'test/test_tcp.js',
-                       'test/test_channel_full.js',
-                       'test/test_inline_stream.js'],
+                src: [
+                    'test/test_tcp.js',
+                    'test/test_channel_full.js',
+                    'test/test_inline_stream.js',
+                    'test/test_http2.js'
+                ],
                 options: {
                     timeout: 10 * 60 * 1000,
                     bail: true,
@@ -55,8 +57,10 @@ module.exports = function (grunt)
         shell: {
             cover: {
                 command: "./node_modules/.bin/nyc -x Gruntfile.js -x 'test/**' ./node_modules/.bin/grunt test-fast",
-                execOptions: {
-                    maxBuffer: 10000 * 1024
+                options: {
+                    execOptions: {
+                        maxBuffer: Infinity
+                    }
                 }
             },
 
@@ -88,9 +92,11 @@ module.exports = function (grunt)
             },
 
             bpmux_test: {
-                command: './build/bpmux-test/linux64/bpmux-test',
-                execOptions: {
-                    maxBuffer: 10000 * 1024
+                command: 'export TEST_ERR_FILE=/tmp/test_err_$$; ./build/bpmux-test/linux64/bpmux-test; if [ -f $TEST_ERR_FILE ]; then exit 1; fi',
+                options: {
+                    execOptions: {
+                        maxBuffer: Infinity
+                    }
                 }
             },
 
@@ -108,27 +114,33 @@ module.exports = function (grunt)
         }
     });
     
-    grunt.loadNpmTasks('grunt-contrib-jshint');
+    grunt.loadNpmTasks('grunt-eslint');
     grunt.loadNpmTasks('grunt-mocha-test');
     grunt.loadNpmTasks('grunt-apidox');
     grunt.loadNpmTasks('grunt-shell');
     grunt.loadNpmTasks('grunt-env');
 
-    grunt.registerTask('lint', 'jshint');
+    grunt.registerTask('lint', 'eslint');
     grunt.registerTask('test', 'mochaTest:default');
     grunt.registerTask('test-fast', ['env:fast', 'mochaTest:default']);
     grunt.registerTask('test-inline', 'mochaTest:inline');
-    grunt.registerTask('test-examples', [ 'shell:bundle_example',
-                                          'mochaTest:examples' ]);
-    grunt.registerTask('test-browser', [ 'save-primus',
-                                         'shell:certs',
-                                         'shell:bundle',
-                                         'shell:nw_build',
-                                         'shell:bpmux_test' ]);
+    grunt.registerTask('test-examples', [
+        'shell:bundle_example',
+        'mochaTest:examples'
+    ]);
+    grunt.registerTask('test-browser', [
+        'save-primus',
+        'shell:certs',
+        'shell:bundle',
+        'shell:nw_build',
+        'shell:bpmux_test'
+    ]);
     grunt.registerTask('docs', 'apidox');
-    grunt.registerTask('coverage', ['shell:cover',
-                                    'shell:cover_report',
-                                    'shell:cover_check']);
+    grunt.registerTask('coverage', [
+        'shell:cover',
+        'shell:cover_report',
+        'shell:cover_check'
+    ]);
     grunt.registerTask('coveralls', 'shell:coveralls');
     grunt.registerTask('default', ['lint', 'test']);
 
