@@ -121,8 +121,15 @@ module.exports = function (grunt)
     grunt.loadNpmTasks('grunt-env');
 
     grunt.registerTask('lint', 'eslint');
-    grunt.registerTask('test', 'mochaTest:default');
-    grunt.registerTask('test-fast', ['env:fast', 'mochaTest:default']);
+    grunt.registerTask('test', [
+        'shell:certs',
+        'mochaTest:default'
+    ]);
+    grunt.registerTask('test-fast', [
+        'shell:certs',
+        'env:fast',
+        'mochaTest:default'
+    ]);
     grunt.registerTask('test-inline', 'mochaTest:inline');
     grunt.registerTask('test-examples', [
         'shell:bundle_example',
