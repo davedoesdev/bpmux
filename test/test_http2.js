@@ -23,7 +23,7 @@ require('./test_comms')(
         server.on('session', function (session)
         {
             server.bpmux_sessions.add(session);
-            server.on('close', function ()
+            session.on('close', function ()
             {
                 server.bpmux_sessions.delete(session);
             });
