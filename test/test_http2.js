@@ -44,8 +44,11 @@ require('./test_comms')(
     },
     function (server, cb)
     {
+        server.removeAllListeners('session');
+
         for (let session of server.bpmux_sessions)
         {
+            session.removeAllListeners('stream');
             try
             {
                 session.destroy();
@@ -54,6 +57,17 @@ require('./test_comms')(
             { // eslint-disable-line no-empty
             }
         }
+
+        server.on('session', function (session)
+        {
+            try
+            {
+                session.destroy();
+            }
+            catch (ex)
+            { // eslint-disable-line no-empty
+            }
+        });
 
         server.close(cb);
     },

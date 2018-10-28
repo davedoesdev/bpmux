@@ -104,9 +104,21 @@ module.exports = function (BrowserPrimus, // will be using browser transport
                 cb(http2_duplex_server);
             });
         },
-        async function (http2_duplex_server, cb)
+        function (http2_duplex_server, cb)
         {
-            await http2_duplex_server.close();
+            http2_duplex_server.detach();
+
+            http2_duplex_server.http2_server.on('session', function (session)
+            {
+                try
+                {
+                    session.destroy();
+                }
+                catch (ex)
+                { // eslint-disable-line no-empty
+                }
+            });
+
             http2_duplex_server.http2_server.close(cb);
         },
         function (conn, cb)
