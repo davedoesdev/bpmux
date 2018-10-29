@@ -185,7 +185,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 }
             });
 
-            if (client_conn) { cb(); }
+            if (client_conn) { console.log("BEFORE EACH DONE"); cb(); }
         }, function (s)
         {
             server = s;
@@ -204,7 +204,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                     }
                 });
 
-                if (server_conn) { cb(); }
+                if (server_conn) { console.log("BEFORE EACH DONE"); cb(); }
             });
         });
     });
