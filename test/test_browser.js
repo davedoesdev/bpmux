@@ -16,7 +16,7 @@ var fs = require('fs'),
     Mocha = require('mocha'),
     Primus = require('primus'),
     PrimusDuplex = require('primus-backpressure').PrimusDuplex,
-    make_http2_duplex_server = require('http2-duplex').default,
+    Http2DuplexServer = require('http2-duplex').Http2DuplexServer,
     BPMux = require('bpmux').BPMux,
     server_port = 7000;
 
@@ -83,7 +83,7 @@ module.exports = function (BrowserPrimus, // will be using browser transport
     require('test_comms')(
         'http2-duplex',
         BPMux,
-        async function (conn_cb, cb)
+        function (conn_cb, cb)
         {
             const http2_server = http2.createSecureServer(
             {
@@ -91,12 +91,11 @@ module.exports = function (BrowserPrimus, // will be using browser transport
                 cert: fs.readFileSync(path.join(__dirname, 'certs', 'server.crt'))
             });
 
-            const http2_duplex_server = await make_http2_duplex_server(
+            const http2_duplex_server = new Http2DuplexServer(
                 http2_server,
                 '/test'
             );
 
-            http2_duplex_server.http2_server = http2_server;
             http2_duplex_server.on('duplex', conn_cb);
 
             http2_server.listen(server_port, function ()
