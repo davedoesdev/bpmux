@@ -228,6 +228,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 (ended === duplexes.length) &&
                 (finished === duplexes.length))
             {
+            console.log("AFTER EACH NEARLY DONE");
                 end_server(server, cb);
             }
         };
