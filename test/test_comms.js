@@ -1853,13 +1853,17 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
               keep_alive,
               1);
 
+for (let i = 0; i < 10000; ++i) {
         calln(new WithOptions('should be able to disable keep-alive',
                               {
                                   keep_alive: false
                               }),
               keep_alive_disabled,
-              1);
+              1,
+              false,
+              it.only);
     }
+}
 
     setup(1);
     setup(2);
