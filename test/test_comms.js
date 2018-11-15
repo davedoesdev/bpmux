@@ -211,12 +211,14 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
     afterEach(function (cb)
     {
+    console.log("AFTER EACH");
         var i;
 
         for (i = 0; i < duplexes.length; i += 1)
         {
             if (listenerCount(duplexes[i], 'error') === 0)
             {
+            console.log("AE CSEBEMR");
                 csebemr(duplexes[i]);
             }
         }
