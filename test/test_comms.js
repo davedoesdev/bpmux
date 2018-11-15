@@ -1571,6 +1571,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         function ka()
         {
+        console.log("KA");
             ++count;
         }
 
@@ -1579,6 +1580,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         setTimeout(function ()
         {
+        console.log("COUNT", count);
             expect(count).to.equal(0);
             cb();
         }, 2000);
