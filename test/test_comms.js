@@ -344,6 +344,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 responder_duplex = duplex;
                 responder_duplex.name = responder_mux.name;
 
+console.log("GOT RESPONDER");
                 if (wait_for_handshake && initiator_duplex)
                 {
                     f(initiator_duplex, responder_duplex, cb);
@@ -366,6 +367,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             expect(initiator_duplex._chan).to.equal(i);
             add_duplex(initiator_duplex);
             initiator_duplex.name = initiator_mux.name;
+console.log("GOT INITIATOR");
             if ((!wait_for_handshake) || responder_duplex)
             {
                 f(initiator_duplex, wait_for_handshake ? responder_duplex :
