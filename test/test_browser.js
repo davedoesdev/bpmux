@@ -91,6 +91,10 @@ module.exports = function (BrowserPrimus, // will be using browser transport
                 cert: fs.readFileSync(path.join(__dirname, 'certs', 'server.crt'))
             });
 
+            http2_server.on('stream', function () {
+                console.log("STREAM");
+            });
+
             const http2_duplex_server = new Http2DuplexServer(
                 http2_server,
                 '/test'
