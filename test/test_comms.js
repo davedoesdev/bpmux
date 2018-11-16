@@ -323,6 +323,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             responder_mux.on('handshake', function (duplex, handshake_data, delay_handshake)
             {
+            console.log("RESPONDER HS");
                 if ((n > 1) && (handshake_data !== i)) { return; }
 
                 expect(responder_chans[duplex._chan]).to.equal(undefined);
