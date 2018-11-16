@@ -687,6 +687,8 @@ BPMux.prototype._process_header = function (buf)
         return;
     }
 
+    console.log("B4HS", type);
+
     switch (type)
     {
         case TYPE_END:
