@@ -792,6 +792,7 @@ BPMux.prototype._send_end = function (duplex)
 
 BPMux.prototype._send_handshake = function (duplex, handshake_data)
 {
+console.log("SH1");
     if (this._finished) { return; }
     if (duplex._handshake_sent) { return this._send(); }
     
@@ -814,8 +815,10 @@ BPMux.prototype._send_handshake = function (duplex, handshake_data)
         duplex._handshake_sent = true;
     }
 
+console.log("SH2");
     var r = this._out_stream.write(buf),
         evname = handshake_data ? 'handshake_sent' : 'pre_handshake_sent';
+console.log("SH3");
 
     this.emit(evname, duplex, r);
     duplex.emit(evname, r);

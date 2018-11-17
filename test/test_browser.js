@@ -95,6 +95,10 @@ module.exports = function (BrowserPrimus, // will be using browser transport
                 console.log("STREAM");
             });
 
+            http2_server.on('session', function () {
+                console.log("SESSION");
+            });
+
             const http2_duplex_server = new Http2DuplexServer(
                 http2_server,
                 '/test'
