@@ -579,7 +579,7 @@ function BPMux(carrier, options)
             // If an error stops all data being written, we may not get 'finish'
             clearInterval(ths._keep_alive_id);
             orig_end.apply(this, arguments);
-        }
+        };
 
         this._out_stream.on('drain', function ()
         {
