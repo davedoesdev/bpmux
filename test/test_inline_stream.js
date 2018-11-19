@@ -87,8 +87,8 @@ describe('inline stream', function ()
     {
         left = new LeftDuplex();
         right = left.right;
-        lmux = new BPMux(left);
-        rmux = new BPMux(right);
+        lmux = new BPMux(left, { keep_alive: false });
+        rmux = new BPMux(right, { keep_alive: false });
     });
 
     it('should multiplex over inline stream', function (cb)
@@ -257,8 +257,8 @@ describe('inline stream', function ()
     {
         left = new LeftDuplex();
         right = left.right;
-        lmux = new BPMux(left);
-        rmux = new BPMux(right, { high_channels: true });
+        lmux = new BPMux(left, { keep_alive: false });
+        rmux = new BPMux(right, { high_channels: true, keep_alive: false });
 
         var ldelay, lduplex, rduplex;
 

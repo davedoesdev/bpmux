@@ -420,6 +420,7 @@ function BPMux(carrier, options)
     this._sending = false;
     this._send_requested = false;
     this._keep_alive_id = null;
+    this._keep_alive_paused = false;
 
     this._out_stream = frame.encode(options);
 
@@ -572,6 +573,19 @@ function BPMux(carrier, options)
 
     if (options.keep_alive !== false)
     {
+        const orig_end = this.carrier.end;
+        this.carrier.end = function ()
+        {
+            // If an error stops all data being written, we may not get 'finish'
+            clearInterval(ths._keep_alive_id);
+            orig_end.apply(this, arguments);
+        }
+
+        this._out_stream.on('drain', function ()
+        {
+            ths._keep_alive_paused = false;
+        });
+
         this._keep_alive_id = setInterval(function ()
         {
             ths._send_keep_alive();
@@ -766,14 +780,10 @@ BPMux.prototype._remove = function (duplex)
 
 BPMux.prototype._send_keep_alive = function ()
 {
-    // Note: Keep-alive messages are sent regardless of remote_free
-    // (if the remove peer isn't reading any of its multiplexed streams,
-    // we still want to keep the underlying connection alive).
-
     var buf = Buffer.alloc(1);
     buf.writeUInt8(TYPE_KEEP_ALIVE, 0, true);
 
-    this._out_stream.write(buf);
+    this._keep_alive_paused = this._keep_alive_paused || !this._out_stream.write(buf);
 };
 
 BPMux.prototype._send_end = function (duplex)
@@ -1026,7 +1036,7 @@ BPMux.prototype.multiplex = function (options)
         throw new Error('full');
     }
 
-    if (this.carrier._writableState.finished)
+    if (this.carrier._writableState.ending)
     {
         throw new Error('finished');
     }
