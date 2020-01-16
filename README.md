@@ -4,7 +4,7 @@ Node stream multiplexing with back-pressure on each stream.
 
 - Run more than one [`stream.Duplex`](https://nodejs.org/api/stream.html#stream_class_stream_duplex) over a carrier `Duplex`.
 - Exerts back-pressure on each multiplexed stream and the underlying carrier stream.
-- Each multiplexed stream's back-pressure is handled separately while respecting the carrier's capacity.
+- Each multiplexed stream's back-pressure is handled separately while respecting the carrier's capacity. [This prevents a slow or paused stream affecting other streams](#comparison).
 - Unit tests with 100% coverage.
 - Tested with TCP streams. You'll get better performance if you [disable Nagle](https://nodejs.org/dist/latest-v10.x/docs/api/net.html#net_socket_setnodelay_nodelay).
 - Works in the browser!
@@ -184,6 +184,105 @@ The browser-side dependencies (`bundle.js`) can be produced by webpack from:
 ```javascript
 PrimusDuplex = require('primus-backpressure').PrimusDuplex;
 BPMux = require('bpmux').BPMux;
+```
+
+## Comparison
+
+Multiplexing libraries which don't exert backpressure on individual streams
+suffer from starvation. A stream which doesn't read its data stops other streams
+on the multiplex getting their data.
+
+Here's a test using the [multiplex](https://github.com/maxogden/multiplex)
+library:
+
+```javascript
+// Uses https://github.com/maxogden/multiplex (npm install multiplex)
+// Backpressure is exerted across the multiplex as a whole, not individual streams.
+// This means a stream which doesn't read its data starves the other streams.
+
+const fs = require('fs');
+const net = require('net');
+const multiplex = require('multiplex');
+
+require('net').createServer(c => {
+    c.pipe(multiplex((stream, id) => {
+        stream.on('data', function(d) {
+            console.log('data', id, d.length);
+            if (id === '0') {
+                this.pause();
+            }
+        });
+    }));
+}).listen(7000, () => {
+    const plex = multiplex();
+    plex.pipe(net.createConnection(7000));
+
+    const stream1 = plex.createStream();
+    const stream2 = plex.createStream();
+
+    fs.createReadStream('/dev/urandom').pipe(stream1)
+    fs.createReadStream('/dev/urandom').pipe(stream2)
+});
+```
+
+When the first stream's is paused, backpressure is applied to the second stream
+too, even though it hasn't been paused. If you run this example, you'll see:
+
+```bash
+$ node multiplex.js 
+data 0 65536
+data 1 65536
+```
+
+[BPMux](#bpmuxcarrier-options) doesn't suffer from this problem since backpressure is exerted on each
+stream separately. Here's the same test:
+
+```javascript
+// BPMux exerts backpressure on individual streams so a stream which doesn't
+// read its data doesn't starve the other streams.
+
+const fs = require('fs');
+const net = require('net');
+const { BPMux } = require('bpmux');
+
+require('net').createServer(c => {
+    new BPMux(c).on('handshake', stream => {
+        stream.on('data', function (d) {
+            console.log('data', stream._chan, d.length);
+            if (stream._chan === 0) {
+                this.pause();
+            }
+        });
+    });
+}).listen(7000, () => {
+    const mux = new BPMux(net.createConnection(7000));
+
+    const stream1 = mux.multiplex();
+    const stream2 = mux.multiplex();
+
+    fs.createReadStream('/dev/urandom').pipe(stream1)
+    fs.createReadStream('/dev/urandom').pipe(stream2)
+});
+```
+
+The second stream continues to receive data when the first stream is paused:
+
+```bash
+data 0 16384
+data 1 16384
+data 1 16384
+data 1 16384
+data 1 16384
+data 1 16384
+data 1 16384
+data 1 16384
+data 1 16384
+data 1 16384
+data 1 16384
+data 1 16384
+data 1 16384
+data 1 16384
+...
 ```
 
 ## Installation
