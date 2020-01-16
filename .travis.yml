@@ -11,3 +11,5 @@ env:
   - TARGET=test-inline
   - TARGET=test-coverage
   - TARGET=test-browser
+script:
+  - npm run travis-$TARGET
