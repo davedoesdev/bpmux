@@ -7,7 +7,7 @@ var path = require('path');
 require('mocha/lib/utils').isString = function (obj)
 {
     return typeof obj === 'string' ||
-           obj.constructor.name == 'WithOptions';
+           (typeof obj === 'object' && obj.constructor.name == 'WithOptions');
 };
 
 module.exports = function (grunt)

@@ -1,7 +1,7 @@
 {
   "name": "bpmux",
   "description": "Node stream multiplexing with back-pressure on each stream",
-  "version": "7.0.19",
+  "version": "7.0.20",
   "homepage": "https://github.com/davedoesdev/bpmux",
   "author": {
     "name": "David Halls",
@@ -42,30 +42,30 @@
     "node": ">= 8"
   },
   "dependencies": {
-    "frame-stream": "^1.1.1"
+    "frame-stream": "^2.0.0"
   },
   "devDependencies": {
-    "async": "^2.6.1",
+    "async": "^3.1.0",
     "chai": "^4.2.0",
-    "coveralls": "^3.0.2",
-    "eslint": "^5.7.0",
-    "finalhandler": "^1.1.1",
-    "grunt": "^1.0.3",
-    "grunt-apidox": "^2.0.1",
-    "grunt-env": "^0.4.4",
-    "grunt-eslint": "^21.0.0",
+    "coveralls": "^3.0.9",
+    "eslint": "^6.8.0",
+    "finalhandler": "^1.1.2",
+    "grunt": "^1.0.4",
+    "grunt-apidox": "^2.0.7",
+    "grunt-env": "^1.0.1",
+    "grunt-eslint": "^22.0.0",
     "grunt-mocha-test": "^0.13.3",
-    "grunt-shell": "^2.1.0",
-    "http2-duplex": "^4.4.0",
-    "mocha": "^5.2.0",
-    "nw-builder": "^3.5.4",
-    "nyc": "^13.1.0",
-    "primus": "^7.2.3",
-    "primus-backpressure": "^1.0.5",
-    "serve-static": "^1.13.2",
-    "tmp": "^0.0.33",
-    "webpack": "^4.22.0",
-    "webpack-cli": "^3.1.2",
-    "ws": "^6.1.0"
+    "grunt-shell": "^3.0.1",
+    "http2-duplex": "^4.4.2",
+    "mocha": "^7.0.0",
+    "nw-builder": "^3.5.7",
+    "nyc": "^15.0.0",
+    "primus": "^7.3.4",
+    "primus-backpressure": "^2.0.0",
+    "serve-static": "^1.14.1",
+    "tmp": "^0.1.0",
+    "webpack": "^4.41.5",
+    "webpack-cli": "^3.3.10",
+    "ws": "^7.2.1"
   }
 }

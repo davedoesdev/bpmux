@@ -1,17 +1,39 @@
 /*eslint-env node */
 "use strict";
 
+var util = require('util'),
+    os = require('os');
+
+console.log = function () // eslint-disable-line no-console
+{
+    process.stdout.write(util.format.apply(this, arguments));
+    process.stdout.write(os.EOL);
+};
+
+console.error = function () // eslint-disable-line no-console
+{
+    process.stderr.write(util.format.apply(this, arguments));
+    process.stderr.write(os.EOL);
+};
+
+console.trace = function trace() // eslint-disable-line no-console
+{
+    var err = new Error();
+    err.name = 'Trace';
+    err.message = util.format.apply(this, arguments);
+    Error.captureStackTrace(err, trace);
+    this.error(err.stack);
+};
+
 // Enable passing options in title (WithOptions in test/test_comms.js)
 require('mocha/lib/utils').isString = function (obj)
 {
     return typeof obj === 'string' ||
-           obj.constructor.name == 'WithOptions';
+           (typeof obj === 'object' && obj.constructor.name == 'WithOptions');
 };
 
 var fs = require('fs'),
     path = require('path'),
-    util = require('util'),
-    os = require('os'),
     http2 = require('http2'),
     Mocha = require('mocha'),
     Primus = require('primus'),
@@ -144,27 +166,6 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         browser_crypto,
         browser_frame,
         true);
-
-    console.log = function () // eslint-disable-line no-console
-    {
-        process.stdout.write(util.format.apply(this, arguments));
-        process.stdout.write(os.EOL);
-    };
-
-    console.error = function () // eslint-disable-line no-console
-    {
-        process.stderr.write(util.format.apply(this, arguments));
-        process.stderr.write(os.EOL);
-    };
-
-    console.trace = function trace() // eslint-disable-line no-console
-    {
-        var err = new Error();
-        err.name = 'Trace';
-        err.message = util.format.apply(this, arguments);
-        Error.captureStackTrace(err, trace);
-        this.error(err.stack);
-    };
 
     mocha.run(function (failures)
     {
