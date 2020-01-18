@@ -220,12 +220,12 @@ require('net').createServer(c => {
     const stream1 = plex.createStream();
     const stream2 = plex.createStream();
 
-    fs.createReadStream('/dev/urandom').pipe(stream1)
-    fs.createReadStream('/dev/urandom').pipe(stream2)
+    fs.createReadStream('/dev/urandom').pipe(stream1);
+    fs.createReadStream('/dev/urandom').pipe(stream2);
 });
 ```
 
-When the first stream's is paused, backpressure is applied to the second stream
+When the first stream is paused, backpressure is applied to the second stream
 too, even though it hasn't been paused. If you run this example, you'll see:
 
 ```bash
@@ -260,8 +260,8 @@ require('net').createServer(c => {
     const stream1 = mux.multiplex();
     const stream2 = mux.multiplex();
 
-    fs.createReadStream('/dev/urandom').pipe(stream1)
-    fs.createReadStream('/dev/urandom').pipe(stream2)
+    fs.createReadStream('/dev/urandom').pipe(stream1);
+    fs.createReadStream('/dev/urandom').pipe(stream2);
 });
 ```
 

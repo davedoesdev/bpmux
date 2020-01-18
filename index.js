@@ -226,7 +226,7 @@ require('net').createServer(c => {
 });
 ```
 
-When the first stream's is paused, backpressure is applied to the second stream
+When the first stream is paused, backpressure is applied to the second stream
 too, even though it hasn't been paused. If you run this example, you'll see:
 
 ```bash
