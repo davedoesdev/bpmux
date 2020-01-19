@@ -39,7 +39,7 @@
     "demux"
   ],
   "engines": {
-    "node": ">= 8"
+    "node": ">= 12"
   },
   "dependencies": {
     "frame-stream": "^2.0.0"
