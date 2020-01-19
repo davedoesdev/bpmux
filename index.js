@@ -400,6 +400,13 @@ function BPDuplex(options, mux, chan)
         this._check_remove();
     });
 
+    this.on('close', function ()
+    {
+        this._finished = true;
+        this._ended = true;
+        this._check_remove();
+    });
+
     mux.duplexes.set(chan, this);
 
     if ((mux._max_open > 0) && (mux.duplexes.size === mux._max_open))
@@ -556,7 +563,7 @@ function BPMux(carrier, options)
         {
             if (!duplex._finished)
             {
-                duplex.emit('error', new Error('carrier stream finished before duplex finished'));
+                duplex.destroy(new Error('carrier stream finished before duplex finished'));
             }
         }
 
@@ -572,7 +579,7 @@ function BPMux(carrier, options)
         {
             if (!duplex._ended)
             {
-                duplex.emit('error', new Error('carrier stream ended before end message received'));
+                duplex.destroy(new Error('carrier stream ended before end message received'));
             }
         }
 

@@ -112,8 +112,16 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
     function add_duplex(duplex)
     {
-        duplex.on('end', function ()
+        var on_end_called = false;
+
+        function on_end()
         {
+            if (on_end_called)
+            {
+                return;
+            }
+            on_end_called = true;
+
             if (this._finished)
             {
                 expect(this._mux.duplexes.has(this._chan)).to.equal(false);
@@ -128,13 +136,27 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             }
             ended += 1;
             if (check) { check(); }
-        });
+        }
 
-        duplex.on('finish', function ()
+        duplex.on('end', on_end);
+        duplex.on('close', on_end);
+
+        var on_finished_called = false;
+
+        function on_finish()
         {
+            if (on_finished_called)
+            {
+                return;
+            }
+            on_finished_called = true;
+
             finished += 1;
             if (check) { check(); }
-        });
+        }
+
+        duplex.on('finish', on_finish);
+        duplex.on('close', on_finish);
 
         duplexes.push(duplex);
     }
@@ -220,6 +242,17 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 csebemr(duplexes[i]);
             }
         }
+
+        // in case status message is still in-flight, causing duplex to be added
+        // again before the connection closes
+        client_mux.on('peer_multiplex', function (d)
+        {
+            csebemr(d);
+        });
+        server_mux.on('peer_multiplex', function (d)
+        {
+            csebemr(d);
+        });
 
         check = function ()
         {
@@ -2095,14 +2128,21 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
                 this.on('removed', function (duplex)
                 {
-                    expect(called).to.equal(false);
+                    var was_called = called;
                     called = true;
-                    expect(duplex).to.equal(third_server);
 
-                    // check we only emit event if actually delete from duplexes Map
-                    this._remove(duplex);
+                    if (!was_called)
+                    {
+                        expect(duplex).to.equal(third_server);
 
-                    cb();
+                        // check we only emit event if actually delete from duplexes Map
+                        this._remove(duplex);
+
+                        cb();
+                    }
+
+                    // Due to 'close' event, first and second duplexes will
+                    // get 'removed' event too.
                 });
 
                 third_client.end();
