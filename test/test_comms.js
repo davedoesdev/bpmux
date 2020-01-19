@@ -2263,6 +2263,39 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         }, 500);
     });
 
+    it('should not send end after finished', function (cb)
+    {
+        var duplex = client_mux.multiplex();
+        csebemr(duplex);
+
+        client_mux.on('finish', function ()
+        {
+            client_mux._out_stream.write = function ()
+            {
+                cb(new Error('should not be called'));
+            };
+
+            client_mux._send_end(duplex);
+        });
+
+        server_mux.on('handshake', function (duplex)
+        {
+            csebemr(duplex);
+        });
+
+        end_server_conn(server_conn, function ()
+        {
+            server_conn = null;
+        });
+
+        end_client_conn(client_conn, function ()
+        {
+            client_conn = null;
+        });
+
+        setTimeout(cb, 1000);
+    });
+
     it('should not send handshake after finished', function (cb)
     {
         var duplex = client_mux.multiplex(

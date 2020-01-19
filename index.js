@@ -767,6 +767,8 @@ BPMux.prototype._process_header = function (buf)
             return this.emit('full');
         }
 
+        console.log(type);
+
         duplex = new BPDuplex(this._peer_multiplex_options, this, chan);
         this.emit('peer_multiplex', duplex);
     }
