@@ -1471,7 +1471,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         {
             var called = false, buf;
 
-            receiver._mux.on('error', function (err)
+            receiver._mux.once('error', function (err)
             {
                 expect(err.message).to.equal('short buffer length 5 < 13');
                 called = true;
