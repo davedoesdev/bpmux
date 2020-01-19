@@ -1526,7 +1526,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         receiver._mux.on('peer_multiplex', csebemr);
 
-        receiver._mux.on('error', function (err)
+        receiver._mux.once('error', function (err)
         {
             expect(err.message).to.equal('short buffer length 5 < 9');
             if (!called)
