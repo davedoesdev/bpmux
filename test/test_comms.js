@@ -905,7 +905,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
     function unknown_type(sender, receiver, cb)
     {
-        receiver._mux.on('error', function (err)
+        receiver._mux.once('error', function (err)
         {
             expect(err.message).to.equal('unknown type: 200');
             cb();
@@ -924,7 +924,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     {
         receiver._mux.on('peer_multiplex', csebemr);
 
-        receiver._mux.on('error', function (err)
+        receiver._mux.once('error', function (err)
         {
             expect(err.message).to.equal('expected handshake, got: 255');
             cb();
@@ -1246,7 +1246,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     {
         var err = new Error('foobar');
 
-        sender._mux.on('error', function (e)
+        sender._mux.once('error', function (e)
         {
             expect(e.message).to.equal('foobar');
             cb();
@@ -2173,7 +2173,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 cb(new Error('should not be called'));
             });
 
-            server_mux.on('error', function (err)
+            server_mux.once('error', function (err)
             {
                 expect(err.message).to.equal('header too big');
                 cb();
