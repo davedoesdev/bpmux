@@ -114,7 +114,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     {
         var on_end_called = false;
 
-        function on_end()
+        function on_end(closed)
         {
             if (on_end_called)
             {
@@ -124,22 +124,29 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             if (this._finished)
             {
-                expect(this._mux.duplexes.has(this._chan)).to.equal(false);
-                this._mux._chan = this._chan;
-                if (!this._mux.carrier._writableState.ending &&
-                    !this._mux.carrier._readableState.ended)
+                if (closed)
                 {
-                    var d = this._mux.multiplex({ _delay_handshake: true });
-                    expect(d._chan).to.equal(this._chan);
-                    csebemr(d);
+                    expect(this._mux.duplexes.has(this._chan)).to.equal(true);
+                }
+                else
+                {
+                    expect(this._mux.duplexes.has(this._chan)).to.equal(false);
+                    this._mux._chan = this._chan;
+                    if (!this._mux.carrier._writableState.ending &&
+                        !this._mux.carrier._readableState.ended)
+                    {
+                        var d = this._mux.multiplex({ _delay_handshake: true });
+                        expect(d._chan).to.equal(this._chan);
+                        csebemr(d);
+                    }
                 }
             }
             ended += 1;
             if (check) { check(); }
         }
 
-        duplex.on('end', on_end);
-        duplex.on('close', on_end);
+        duplex.on('end', on_end.bind(duplex, false));
+        duplex.on('close', on_end.bind(duplex, true));
 
         var on_finished_called = false;
 
@@ -1906,7 +1913,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     {
         var duplex = client_mux.multiplex(
         {
-            handshake_data: new ClientBuffer('foo')
+            handshake_data: ClientBuffer.from('foo')
         });
         expect(duplex._handshake_sent).to.equal(false);
         csebemr(duplex);

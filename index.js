@@ -402,9 +402,15 @@ function BPDuplex(options, mux, chan)
 
     this.on('close', function ()
     {
+        if (!this._finished)
+        {
+            this._mux._send_end(this);
+        }
         this._finished = true;
         this._ended = true;
-        this._check_remove();
+        // don't call _check_remove because this may be due to a local
+        // destroy and so data may still come from peer (but be ignored
+        // because readableState will be ended
     });
 
     mux.duplexes.set(chan, this);
@@ -596,7 +602,8 @@ function BPMux(carrier, options)
     {
         for (var duplex of ths.duplexes.values())
         {
-            if (EventEmitter.listenerCount(duplex, 'error') > 0)
+            if ((EventEmitter.listenerCount(duplex, 'error') > 0) &&
+                !(duplex._finished && duplex._ended))
             {
                 duplex.emit('error', err);
             }
@@ -852,14 +859,12 @@ BPMux.prototype._process_header = function (buf)
                 duplex._check_remove();
                 duplex.emit('error', new Error('peer error'));
                 duplex.push(null);
-                duplex._end_pending = false;
             }
             else if (duplex._end_pending)
             {
                 duplex._ended = true;
                 duplex._check_remove();
                 duplex.push(null);
-                duplex._end_pending = false;
             }
             this._send();
             break;
