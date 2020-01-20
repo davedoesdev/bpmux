@@ -402,12 +402,13 @@ function BPDuplex(options, mux, chan)
 
     this.on('close', function ()
     {
-        if (!this._finished)
+        var was_finished = this._finished;
+        this._finished = true;
+        this._ended = true;
+        if (!was_finished)
         {
             this._mux._send_end(this);
         }
-        this._finished = true;
-        this._ended = true;
         // don't call _check_remove because this may be due to a local
         // destroy and so data may still come from peer (but be ignored
         // because we don't push to destroyed streams)
@@ -567,7 +568,7 @@ function BPMux(carrier, options)
 
         for (var duplex of ths.duplexes.values())
         {
-            if (!duplex._finished)
+            if (!duplex._finished && !duplex.destroyed)
             {
                 duplex.destroy(new Error('carrier stream finished before duplex finished'));
             }
@@ -583,7 +584,7 @@ function BPMux(carrier, options)
 
         for (var duplex of ths.duplexes.values())
         {
-            if (!duplex._ended)
+            if (!duplex._ended && !duplex.destroyed)
             {
                 duplex.destroy(new Error('carrier stream ended before end message received'));
             }
@@ -603,7 +604,8 @@ function BPMux(carrier, options)
         for (var duplex of ths.duplexes.values())
         {
             if ((EventEmitter.listenerCount(duplex, 'error') > 0) &&
-                !(duplex._finished && duplex._ended))
+                !(duplex._finished && duplex._ended) &&
+                !duplex.destroyed)
             {
                 duplex.emit('error', err);
             }
