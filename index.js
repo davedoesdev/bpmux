@@ -410,7 +410,7 @@ function BPDuplex(options, mux, chan)
         this._ended = true;
         // don't call _check_remove because this may be due to a local
         // destroy and so data may still come from peer (but be ignored
-        // because readableState will be ended
+        // because we don't push to destroyed streams)
     });
 
     mux.duplexes.set(chan, this);
@@ -639,7 +639,7 @@ function BPMux(carrier, options)
                     ths._reading_duplex = null;
                 }
 
-                if (!duplex._readableState.ended)
+                if (!duplex._readableState.ended && !duplex.destroyed)
                 {
                     if (duplex._check_read_overflow &&
                         ((duplex._readableState.length + data.length) >
