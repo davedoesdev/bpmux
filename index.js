@@ -387,31 +387,36 @@ function BPDuplex(options, mux, chan)
     this._error_end = false;
     this._error_end_pending = false;
 
-    this.on('finish', function ()
+    function finish()
     {
         this._finished = true;
         this._mux._send_end(this);
         this._check_remove();
-    });
+    }
+    this.on('finish', finish);
 
-    this.on('end', function ()
+    function end()
     {
         this._ended = true;
         this._check_remove();
-    });
+    }
+    this.on('end', end);
 
     this.on('close', function ()
     {
         var was_finished = this._finished;
         this._finished = true;
         this._ended = true;
+        this.removeListener('finish', finish);
+        this.removeListener('end', end);
         if (!was_finished)
         {
             this._mux._send_end(this);
         }
-        // don't call _check_remove because this may be due to a local
+        // Don't call _check_remove because this may be due to a local
         // destroy and so data may still come from peer (but be ignored
-        // because we don't push to destroyed streams)
+        // because we don't push to destroyed streams).
+        // Duplex will be removed when TYPE_END is received.
     });
 
     mux.duplexes.set(chan, this);

@@ -199,21 +199,39 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         finished = 0;
         check = null;
 
+        function mux_error_listener(err)
+        {
+            if (!this.skipped_set)
+            {
+                this.skipped_set = new Set();
+            }
+
+            if (this.skipped_set.has(err.message))
+            {
+                return;
+            }
+
+            for (const l of this.listeners('error'))
+            {
+                if (l !== mux_error_listener)
+                {
+                    return this.skipped_set.add(err.message);
+                }
+            }
+
+            expect(err.message).to.be.oneOf([
+                'write after end',
+                'This socket has been ended by the other party'
+            ]);
+        }
+
         make_server(function (c)
         {
             server_conn = c;
             server_mux = new ServerBPMux(server_conn, options);
             server_mux.setMaxListeners(0);
             server_mux.name = 'server';
-
-            server_mux.on('error', function (err)
-            {
-                if (listenerCount(this, 'error') === 0)
-                {
-                    expect(err.message).to.equal('write after end');
-                }
-            });
-
+            server_mux.on('error', mux_error_listener);
             if (client_conn) { cb(); }
         }, function (s)
         {
@@ -224,15 +242,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 client_mux = new ClientBPMux(client_conn, options);
                 client_mux.setMaxListeners(0);
                 client_mux.name = 'client';
-
-                client_mux.on('error', function (err)
-                {
-                    if (listenerCount(this, 'error') === 0)
-                    {
-                        expect(err.message).to.equal('write after end');
-                    }
-                });
-
+                client_mux.on('error', mux_error_listener);
                 if (server_conn) { cb(); }
             });
         });
@@ -2332,6 +2342,48 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         });
 
         setTimeout(cb, 1000);
+    });
+
+    it('should not remove duplex after close until end message received', function (cb)
+    {
+        var client_duplex = client_mux.multiplex();
+
+        server_mux.on('handshake', function (server_duplex)
+        {
+            var client_ended = false, server_ended = false;
+
+            server_duplex.on('readable', function ()
+            {
+                if (!client_ended)
+                {
+                    client_ended = true;
+                    // On Node 12, we get close then finish events
+                    // On Node 13, we get finish then close events
+                    // This test makes sure we don't remove the duplex until
+                    // the server is done with the duplex. Otherwise we get
+                    // 'expected handshake, got: 2' error
+                    client_duplex.end('bar');
+                    client_duplex.destroy();
+                }
+
+                while (this.read() !== null);
+            });
+
+            server_duplex.on('end', function ()
+            {
+                server_ended = true;
+                this.end();
+            });
+
+            client_mux.on('removed', function (duplex)
+            {
+                expect(duplex).to.equal(client_duplex);
+                expect(server_ended).to.equal(true);
+                cb();
+            });
+
+            client_duplex.write('foo');
+        });
     });
 
     it('should not send if already sending', function (cb)
