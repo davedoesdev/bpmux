@@ -2386,6 +2386,32 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         });
     });
 
+    it('should remove duplex after end message received then closed', function (cb)
+    {
+        var client_duplex = client_mux.multiplex();
+
+        client_mux.on('removed', function (duplex)
+        {
+            expect(duplex).to.equal(client_duplex);
+            cb();
+        });
+
+        server_mux.on('handshake', function (server_duplex)
+        {
+            client_duplex.on('readable', function ()
+            {
+                while (this.read() !== null);
+            });
+
+            client_duplex.on('end', function ()
+            {
+                this.destroy();
+            });
+
+            server_duplex.end();
+        });
+    });
+
     it('should not send if already sending', function (cb)
     {
         var orig__send = client_mux.__send, n = 0, in_call = false;
