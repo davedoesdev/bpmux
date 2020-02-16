@@ -122,23 +122,16 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             }
             on_end_called = true;
 
-            if (this._finished)
+            if (this._finished && this._ended && closed)
             {
-                if (closed)
+                expect(this._mux.duplexes.has(this._chan)).to.equal(false);
+                this._mux._chan = this._chan;
+                if (!this._mux.carrier._writableState.ending &&
+                    !this._mux.carrier._readableState.ended)
                 {
-                    expect(this._mux.duplexes.has(this._chan)).to.equal(true);
-                }
-                else
-                {
-                    expect(this._mux.duplexes.has(this._chan)).to.equal(false);
-                    this._mux._chan = this._chan;
-                    if (!this._mux.carrier._writableState.ending &&
-                        !this._mux.carrier._readableState.ended)
-                    {
-                        var d = this._mux.multiplex({ _delay_handshake: true });
-                        expect(d._chan).to.equal(this._chan);
-                        csebemr(d);
-                    }
+                    var d = this._mux.multiplex({ _delay_handshake: true });
+                    expect(d._chan).to.equal(this._chan);
+                    csebemr(d);
                 }
             }
             ended += 1;

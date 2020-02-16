@@ -20,6 +20,11 @@ window.addEventListener('unhandledrejection', function (ev)
     done(ev.reason);
 });
 
+window.onerror = function (message, source, lineno, colno, err)
+{
+    done(err);
+};
+
 console.log = function ()
 {
     process.stdout.write(util.format.apply(this, arguments));

@@ -585,6 +585,7 @@ function BPMux(carrier, options)
         {
             if (!duplex._ended && !duplex.destroyed)
             {
+                duplex._ended = true; // we won't get any more messages for it
                 duplex.destroy(new Error('carrier stream ended before end message received'));
             }
         }
