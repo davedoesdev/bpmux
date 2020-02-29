@@ -12,6 +12,7 @@ Node stream multiplexing with back-pressure on each stream.
   - Tested with [Primus](https://github.com/primus/primus) (using [primus-backpressure](https://github.com/davedoesdev/primus-backpressure)).
   - Tested with HTTP/2 streams (using [browser-http2-duplex](https://github.com/davedoesdev/browser-http2-duplex)). Also tested Node-to-Node using `http2`.
   - Browser unit tests using [webpack](http://webpack.github.io/) and [nwjs](http://nwjs.io/).
+- **See the [errors](#errors) section for information on why multiplexed streams error when their carrier streams closes before they do.**
 
 The API is described [here](#api).
 
@@ -235,7 +236,7 @@ data 0 65536
 data 1 65536
 ```
 
-BPMux doesn't suffer from this problem since backpressure is exerted on each
+bpmux doesn't suffer from this problem since backpressure is exerted on each
 stream separately. Here's the same test:
 
 ```javascript
@@ -285,6 +286,33 @@ data 1 16384
 data 1 16384
 ...
 ```
+
+## Errors
+
+bpmux will emit `error` events on multiplexed streams if their underlying
+(carrier) stream closes before they have closed. The error message will be one
+of these two strings:
+
+```
+carrier stream finished before duplex finished
+carrier stream ended before end message received
+```
+
+As this is an `error` event, you must register an event listener on multiplexed
+streams [if you don't want the Node process to exit](https://nodejs.org/dist/latest-v13.x/docs/api/events.html#events_error_events).
+
+The reasoning behind emitting `error` events on open multiplexed streams when
+their carrier closes is:
+
+- If you're reading from a stream and it hasn't ended before the carrier closes then there may be some data that you'll never receive. This is an error state.
+
+- If you're writing to a stream and it hasn't finished before the carrier closes then your application should be informed about it straight away. If it's performing some heavy calculation, for example, then it has a chance to cancel it before writing the result to the stream.
+
+If you do register `error` event listeners, make sure you do so for streams
+you multiplex using [`multiplex()`](#bpmuxprototypemultiplexoptions) _and_
+for streams you receive using the [`handshake`](#bpmuxeventshandshakeduplex-handshake_data-delay_handshake) or [`peer_multiplex`](#bpmuxeventspeer_multiplexduplex) events.
+
+`BPMux` objects will also re-emit any `error` events their carrier stream emits.
 
 ## Installation
 
