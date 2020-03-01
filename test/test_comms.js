@@ -2509,8 +2509,19 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         stream1.on('error', on_err);
         stream2.on('error', on_err);
 
-        fs.createReadStream('/dev/urandom').pipe(stream1);
-        fs.createReadStream('/dev/urandom').pipe(stream2);
+        const randomBytes = util.promisify(crypto.randomBytes);
+
+        async function* random()
+        {
+            while (true)
+            {
+                yield await randomBytes(64 * 1024);
+
+            }
+        }
+
+        stream.Readable.from(random()).pipe(stream1);
+        stream.Readable.from(random()).pipe(stream2);
     });
 }
 
