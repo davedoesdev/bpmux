@@ -2473,18 +2473,23 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     {
         let counts = [0, 0];
 
-        server_mux.on('handshake', function (duplex) {
-            duplex.on('error', function (err) {
+        server_mux.on('handshake', function (duplex)
+        {
+            duplex.on('error', function (err)
+            {
                 expect(err.message).to.equal('carrier stream ended before end message received');
             });
 
-            duplex.on('data', function (d) {
+            duplex.on('data', function (d)
+            {
                 counts[duplex._chan] += d.length;
                 expect(counts[0]).to.be.at.most(16 * 1024);
-                if (duplex._chan === 0) {
+                if (duplex._chan === 0)
+                {
                     this.pause();
                 }
-                if (counts[1] === 16 * 1024 * 1024) {
+                if (counts[1] === 16 * 1024 * 1024)
+                {
                     cb();
                 }
             });
@@ -2493,7 +2498,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         const stream1 = client_mux.multiplex();
         const stream2 = client_mux.multiplex();
 
-        function on_err(err) {
+        function on_err(err)
+        {
             expect(err.message).to.be.oneOf([
                 'write after end',
                 'carrier stream finished before duplex finished'
