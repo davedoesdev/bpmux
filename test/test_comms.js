@@ -2477,7 +2477,10 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         {
             duplex.on('error', function (err)
             {
-                expect(err.message).to.equal('carrier stream ended before end message received');
+                expect(err.message).to.be.oneOf([
+                    'carrier stream ended before end message received',
+                    'carrier stream finished before duplex finished'
+                ]);
             });
 
             duplex.on('data', function (d)
@@ -2509,14 +2512,13 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         stream1.on('error', on_err);
         stream2.on('error', on_err);
 
-        const randomBytes = util.promisify(crypto.randomBytes);
+        const randomBytes = util.promisify(get_crypto(client_mux).randomBytes);
 
         async function* random()
         {
             while (true)
             {
                 yield await randomBytes(64 * 1024);
-
             }
         }
 
