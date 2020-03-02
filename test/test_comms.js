@@ -2491,7 +2491,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 {
                     this.pause();
                 }
-                if (counts[1] === 16 * 1024 * 1024)
+                if (counts[1] === 1024 * 1024)
                 {
                     cb();
                 }
