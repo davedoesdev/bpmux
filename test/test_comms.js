@@ -96,16 +96,22 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             ]);
             if (err.message === 'carrier stream ended before end message received')
             {
+                expect(err.carrier_done).to.equal(true);
                 this.push(null);
             }
             else if (err.message === 'carrier stream finished before duplex finished')
             {
+                expect(err.carrier_done).to.equal(true);
                 // give chance for duplex._ended === true case to occur in
                 // carrier on end/close handler
                 setImmediate(function ()
                 {
                     duplex.end();
                 });
+            }
+            else
+            {
+                expect(err.carrier_done).to.equal(undefined);
             }
         });
     }
@@ -2481,6 +2487,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                     'carrier stream ended before end message received',
                     'carrier stream finished before duplex finished'
                 ]);
+                expect(err.carrier_done).to.equal(true);
             });
 
             duplex.on('data', function (d)
@@ -2507,6 +2514,15 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 'write after end',
                 'carrier stream finished before duplex finished'
             ]);
+
+            if (err.message === 'carrier stream finished before duplex finished')
+            {
+                expect(err.carrier_done).to.equal(true);
+            }
+            else
+            {
+                expect(err.carrier_done).to.equal(undefined);
+            }
         }
 
         stream1.on('error', on_err);

@@ -290,13 +290,15 @@ data 1 16384
 ## Errors
 
 bpmux will emit `error` events on multiplexed streams if their underlying
-(carrier) stream closes before they have closed. The error message will be one
-of these two strings:
+(carrier) stream closes before they have closed. The error object will have one
+of the following messages:
 
 ```
 carrier stream finished before duplex finished
 carrier stream ended before end message received
 ```
+
+and have a property `carrier_done` set to `true`.
 
 As this is an `error` event, you must register an event listener on multiplexed
 streams [if you don't want the Node process to exit](https://nodejs.org/dist/latest-v13.x/docs/api/events.html#events_error_events).
@@ -597,7 +599,9 @@ function BPMux(carrier, options)
         {
             if (!duplex._finished && !duplex.destroyed)
             {
-                duplex.destroy(new Error('carrier stream finished before duplex finished'));
+                const err = new Error('carrier stream finished before duplex finished');
+                err.carrier_done = true;
+                duplex.destroy(err);
             }
         }
 
@@ -614,7 +618,9 @@ function BPMux(carrier, options)
             if (!duplex._ended && !duplex.destroyed)
             {
                 duplex._ended = true; // we won't get any more messages for it
-                duplex.destroy(new Error('carrier stream ended before end message received'));
+                const err = new Error('carrier stream ended before end message received');
+                err.carrier_done = true;
+                duplex.destroy(err);
             }
         }
 
