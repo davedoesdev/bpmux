@@ -15,13 +15,15 @@ function RightDuplex(left)
 {
     Duplex.call(this);
     this.left = left;
-    this.on('finish', function ()
-    {
-        left.push(null);
-    });
 }
 
 util.inherits(RightDuplex, Duplex);
+
+RightDuplex.prototype._final = function (cb)
+{
+    this.left.push(null);
+    cb();
+};
 
 RightDuplex.prototype._read = function ()
 {
@@ -49,13 +51,15 @@ function LeftDuplex()
 {
     Duplex.call(this);
     this.right = new RightDuplex(this);
-    this.on('finish', function ()
-    {
-        this.right.push(null);
-    }.bind(this));
 }
 
 util.inherits(LeftDuplex, Duplex);
+
+LeftDuplex.prototype._final = function (cb)
+{
+    this.right.push(null);
+    cb();
+};
 
 LeftDuplex.prototype._read = function ()
 {
