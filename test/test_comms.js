@@ -2512,7 +2512,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         {
             expect(err.message).to.be.oneOf([
                 'write after end',
-                'carrier stream finished before duplex finished'
+                'carrier stream finished before duplex finished',
+                'carrier stream ended before end message received'
             ]);
 
             if (err.message === 'carrier stream finished before duplex finished')
