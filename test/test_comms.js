@@ -2516,7 +2516,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 'carrier stream ended before end message received'
             ]);
 
-            if (err.message === 'carrier stream finished before duplex finished')
+            if ((err.message === 'carrier stream finished before duplex finished') ||
+                (err.message === 'carrier stream ended before end message received'))
             {
                 expect(err.carrier_done).to.equal(true);
             }
