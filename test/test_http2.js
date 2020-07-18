@@ -111,7 +111,7 @@ require('./test_comms')(
     function (conn, cb)
     {
         conn.on('close', cb);
-        conn.end();
+        conn.close();
     },
     Buffer,
     require('crypto'),
