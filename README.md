@@ -4,14 +4,14 @@ Node stream multiplexing with back-pressure on each stream.
 
 - Run more than one [`stream.Duplex`](https://nodejs.org/api/stream.html#stream_class_stream_duplex) over a carrier `Duplex`.
 - Exerts back-pressure on each multiplexed stream and the underlying carrier stream.
-- Each multiplexed stream's back-pressure is handled separately while respecting the carrier's capacity. [This prevents a slow or paused stream affecting other streams](#comparison).
+- Each multiplexed stream's back-pressure is handled separately while respecting the carrier's capacity. [This prevents a slow or paused stream affecting other streams](#comparison). This does incur an overhead so if you don't care about this feature you might want to look elsewhere.
 - Unit tests with 100% coverage.
 - Tested with TCP streams. You'll get better performance if you [disable Nagle](https://nodejs.org/dist/latest-v10.x/docs/api/net.html#net_socket_setnodelay_nodelay).
 - Works in the browser!
   - Tested with [Primus](https://github.com/primus/primus) (using [primus-backpressure](https://github.com/davedoesdev/primus-backpressure)).
   - Tested with HTTP/2 streams (using [browser-http2-duplex](https://github.com/davedoesdev/browser-http2-duplex)). Also tested Node-to-Node using `http2`.
   - Browser unit tests using [webpack](http://webpack.github.io/) and [nwjs](http://nwjs.io/).
-- **See the [errors](#errors) section for information on why multiplexed streams error when their carrier streams closes before they do.**
+- **See the [errors](#errors) section for information on why multiplexed streams error when their carrier stream closes before they do.**
 
 The API is described [here](#api).
 
