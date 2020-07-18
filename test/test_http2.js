@@ -110,7 +110,17 @@ require('./test_comms')(
     },
     function (conn, cb)
     {
-        conn.on('close', cb);
+        var called = false;
+        function cb2()
+        {
+            if (!called)
+            {
+                called = true;
+                cb();
+            }
+        }
+        conn.on('end', cb2);
+        conn.on('close', cb2);
         conn.close();
     },
     Buffer,
