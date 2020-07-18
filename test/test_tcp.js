@@ -50,7 +50,7 @@ function setup(aho)
         },
         function (conn, cb)
         {
-            conn.on('end', cb);
+            conn.on('close', cb);
             conn.end();
         },
         Buffer,
