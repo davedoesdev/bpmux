@@ -638,7 +638,7 @@ function BPMux(carrier, options)
         for (var duplex of ths.duplexes.values())
         {
             if ((EventEmitter.listenerCount(duplex, 'error') > 0) &&
-                !(duplex._finished && duplex._ended) &&
+                !(duplex._ended && duplex._finished) &&
                 !duplex.destroyed)
             {
                 duplex.emit('error', err);
