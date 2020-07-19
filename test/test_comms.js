@@ -92,7 +92,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             [
                 'carrier stream ended before end message received',
                 'carrier stream finished before duplex finished',
-                'write after end'
+                'write after end',
+                'write EPIPE'
             ]);
             if (err.message === 'carrier stream ended before end message received')
             {
