@@ -73,10 +73,6 @@ module.exports = function (grunt)
                 command: './node_modules/.bin/nyc check-coverage --statements 100 --branches 100 --functions 100 --lines 100'
             },
 
-            coveralls: {
-                command: 'cat coverage/lcov.info | coveralls'
-            },
-
             nw_build: {
                 command: [
                     'rsync -a node_modules test/fixtures/nw --exclude nw-builder',
@@ -149,7 +145,6 @@ module.exports = function (grunt)
         'shell:cover_report',
         'shell:cover_check'
     ]);
-    grunt.registerTask('coveralls', 'shell:coveralls');
     grunt.registerTask('default', ['lint', 'test']);
 
     grunt.registerTask('save-primus', function ()

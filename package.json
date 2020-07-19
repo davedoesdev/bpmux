@@ -19,9 +19,9 @@
   "main": "index.js",
   "scripts": {
     "test": "grunt lint test-fast",
-    "travis-test-coverage": "grunt lint coverage coveralls",
-    "travis-test-browser": "grunt test-browser",
-    "travis-test-inline": "grunt test-inline"
+    "ci-coverage": "grunt lint coverage",
+    "ci-browser": "grunt test-browser",
+    "ci-inline": "grunt test-inline"
   },
   "directories": {
     "test": "test"
@@ -47,7 +47,6 @@
   "devDependencies": {
     "async": "^3.2.0",
     "chai": "^4.2.0",
-    "coveralls": "^3.1.0",
     "eslint": "^7.4.0",
     "finalhandler": "^1.1.2",
     "grunt": "^1.2.1",
