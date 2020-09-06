@@ -38,7 +38,7 @@ var fs = require('fs'),
     Mocha = require('mocha'),
     Primus = require('primus'),
     PrimusDuplex = require('primus-backpressure').PrimusDuplex,
-    Http2DuplexServer = require('http2-duplex').Http2DuplexServer,
+    Http2DuplexServer = require('./http2_duplex_server.js').Http2DuplexServer,
     BPMux = require('bpmux').BPMux,
     server_port = 7000;
 

@@ -3,7 +3,6 @@ const os = require('os');
 
 function done(err)
 {
-    require('nw.gui').App.quit();
     if (err)
     {
         if (process.env.TEST_ERR_FILE)
@@ -11,6 +10,10 @@ function done(err)
             require('fs').writeFileSync(process.env.TEST_ERR_FILE, '');
         }
         process.stderr.write(`${err.stack}\n`);
+    }
+    require('nw.gui').App.quit();
+    if (err)
+    {
         throw err;
     }
 }
