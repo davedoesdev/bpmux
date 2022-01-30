@@ -73,10 +73,10 @@ require('./test_comms')(
     },
     function (conn, cb)
     {
+        conn.on('close', cb);
         conn.on('end', function ()
         {
             this.end();
-            cb();
         });
     },
     BPMux,

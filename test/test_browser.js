@@ -58,7 +58,7 @@ module.exports = function (BrowserPrimus, // will be using browser transport
     });
 
     mocha.suite.emit('pre-require', global, null, mocha);
-
+/*
     require('test_comms')(
         'primus',
         BPMux,
@@ -101,7 +101,7 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         browser_crypto,
         browser_frame,
         true);
-
+*/
     require('test_comms')(
         'http2-duplex',
         BPMux,
@@ -144,10 +144,14 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         },
         function (conn, cb)
         {
+            // we have to listen for 'close' separately in case the actual
+            // connection terminates, in which case we don't get 'end'
+            // because browser-http2-duplex forgets about it before the
+            // end message arrives
+            conn.on('close', cb);
             conn.on('end', function ()
             {
                 this.end();
-                cb();
             });
         },
         BrowserBPMux,

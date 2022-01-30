@@ -93,7 +93,9 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 'carrier stream ended before end message received',
                 'carrier stream finished before duplex finished',
                 'write after end',
-                'write EPIPE'
+                'write EPIPE',
+                'read ECONNRESET',
+                'write ECONNRESET'
             ]);
             if (err.message === 'carrier stream ended before end message received')
             {
@@ -221,7 +223,10 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             expect(err.message).to.be.oneOf([
                 'write after end',
-                'This socket has been ended by the other party'
+                'This socket has been ended by the other party',
+                'read ECONNRESET',
+                'write ECONNRESET',
+                'write EPIPE'
             ]);
         }
 
@@ -2329,6 +2334,42 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         server_mux.on('handshake', function ()
         {
             cb(new Error('should not be called'));
+        });
+
+        end_server_conn(server_conn, function ()
+        {
+            server_conn = null;
+        });
+
+        end_client_conn(client_conn, function ()
+        {
+            client_conn = null;
+        });
+
+        setTimeout(cb, 1000);
+    });
+
+    it('should not send data after finished', function (cb)
+    {
+        var duplex = client_mux.multiplex();
+        csebemr(duplex);
+
+        client_mux.on('finish', function ()
+        {
+            Object.defineProperty(client_mux._out_stream, '_writeableState',
+            {
+                get: function ()
+                {
+                    cb(new Error('should not be called'));
+                }
+            });
+
+            client_mux.__send();
+        });
+
+        server_mux.on('handshake', function (duplex)
+        {
+            csebemr(duplex);
         });
 
         end_server_conn(server_conn, function ()

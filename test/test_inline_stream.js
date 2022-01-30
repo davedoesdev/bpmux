@@ -492,8 +492,8 @@ describe('inline stream', function ()
             }
             if ((count_complete + count_incomplete) === 4343)
             {
-                expect(count_complete).to.equal(4342);
-                expect(count_incomplete).to.equal(1);
+                expect(count_complete).to.equal(4341);
+                expect(count_incomplete).to.equal(2);
                 expect(count_drain).to.equal(0);
                 left._write = orig_write;
                 left._write(write_chunk, write_encoding, write_cb);

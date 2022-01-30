@@ -30,13 +30,13 @@ function setup(aho)
         },
         function (conn, cb)
         {
+            conn.on('close', cb);
             conn.on('end', function ()
             {
                 if (this.allowHalfOpen)
                 {
                     this.end();
                 }
-                cb();
             });
         },
         BPMux,

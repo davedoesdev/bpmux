@@ -8,15 +8,15 @@ jobs:
 
         strategy:
             matrix:
-              node-version: [12, 14]
-              target: [inline, coverage, browser]
+              node-version: [12, 14, 16]
+              target: [test-inline, test-browser, coverage]
 
         steps:
             - name: Checkout
               uses: actions/checkout@v2
 
             - name: Use Node.js
-              uses: actions/setup-node@v2.1.0
+              uses: actions/setup-node@v2
               with:
                 node-version: ${{ matrix.node-version }}
 
@@ -24,12 +24,12 @@ jobs:
               run: npm ci
 
             - name: Run tests
-              uses: GabrielBB/xvfb-action@v1.2
+              uses: GabrielBB/xvfb-action@v1
               with:
                 run: npm run ci-${{ matrix.target }}
 
             - name: Coveralls
               if: matrix.target == 'coverage'
-              uses: coverallsapp/github-action@v1.1.1
+              uses: coverallsapp/github-action@master
               with:
                 github-token: ${{ secrets.GITHUB_TOKEN }}
