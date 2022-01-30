@@ -58,7 +58,7 @@ module.exports = function (BrowserPrimus, // will be using browser transport
     });
 
     mocha.suite.emit('pre-require', global, null, mocha);
-/*
+
     require('test_comms')(
         'primus',
         BPMux,
@@ -101,7 +101,7 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         browser_crypto,
         browser_frame,
         true);
-*/
+
     require('test_comms')(
         'http2-duplex',
         BPMux,

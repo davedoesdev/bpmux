@@ -73,10 +73,12 @@ require('./test_comms')(
     },
     function (conn, cb)
     {
-        conn.on('close', cb);
         conn.on('end', function ()
         {
             this.end();
+            // note: Http2Stream hardcodes autoDestroy to false so
+            // we don't get close event here
+            cb();
         });
     },
     BPMux,
