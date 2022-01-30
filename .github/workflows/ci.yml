@@ -29,7 +29,7 @@ jobs:
             - name: Run tests
               uses: GabrielBB/xvfb-action@v1
               with:
-                run: npm run ci-${{ matrix.target }}
+                run: npx grunt ${{ matrix.target }}
 
             - name: Coveralls
               if: matrix.target == 'coverage'
