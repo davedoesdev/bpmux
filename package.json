@@ -60,7 +60,7 @@
     "grunt-mocha-test": "^0.13.3",
     "http2-duplex": "^5.3.1",
     "mocha": "^9.2.0",
-    "nw-builder": "git://github.com/davedoesdev/nw-builder.git",
+    "nw-builder": "davedoesdev/nw-builder",
     "primus": "^8.0.5",
     "primus-backpressure": "^2.0.7",
     "process": "^0.11.10",
