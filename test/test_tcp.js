@@ -30,6 +30,10 @@ function setup(aho)
         },
         function (conn, cb)
         {
+            if (conn.destroyed)
+            {
+                return cb();
+            }
             conn.on('close', cb);
             conn.on('end', function ()
             {
@@ -50,6 +54,10 @@ function setup(aho)
         },
         function (conn, cb)
         {
+            if (conn.destroyed)
+            {
+                return cb();
+            }
             conn.on('close', cb);
             conn.end();
         },

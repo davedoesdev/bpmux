@@ -43,7 +43,8 @@ module.exports = function (grunt)
                     'test/test_tcp.js',
                     'test/test_channel_full.js',
                     'test/test_inline_stream.js',
-                    'test/test_http2.js'
+                    'test/test_http2.js',
+                    'test/test_http2_session.js'
                 ],
                 options: {
                     timeout: 10 * 60 * 1000,

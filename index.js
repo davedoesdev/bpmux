@@ -389,6 +389,25 @@ var util = require('util'),
     TYPE_ERROR_END = 6,
     TYPE_KEEP_ALIVE = 7;
 
+class Http2Sessions
+{
+    constructor(client, server)
+    {
+        this._client = client;
+        this._server = server;
+    }
+
+    get client()
+    {
+        return this._client;
+    }
+
+    get server()
+    {
+        return this._server;
+    }
+}
+
 function BPDuplex(options, mux, chan)
 {
     Duplex.call(this, options);
@@ -399,6 +418,7 @@ function BPDuplex(options, mux, chan)
     }, options);
 
     this._mux = mux;
+    this.mux = mux;
     this._chan = chan;
     this._max_write_size = options.max_write_size;
     this._check_read_overflow = options.check_read_overflow !== false;
@@ -433,14 +453,7 @@ function BPDuplex(options, mux, chan)
             this._finished = true;
             this._mux._send_end(this);
         }
-        if (this._ended)
-        {
-            this._check_remove();
-        }
-        // Don't call _check_remove if not ended because the close event may be
-        // due to a local destroy and so data may still come from the peer
-        // (but be ignored because we don't push to destroyed streams).
-        // Duplex will be removed when TYPE_END is received.
+        this._check_remove();
     });
 
     mux.duplexes.set(chan, this);
@@ -458,6 +471,10 @@ util.inherits(BPDuplex, Duplex);
 
 BPDuplex.prototype._check_remove = function ()
 {
+    // Don't call _remove if not ended because the duplex may have closed
+    // due to a local destroy and so data may still come from the peer
+    // (but be ignored because we don't push to destroyed streams).
+    // Duplex will be removed when TYPE_END is received.
     if (this._finished && this._ended && !this._removed)
     {
         this._mux._remove(this);
@@ -546,19 +563,128 @@ function BPMux(carrier, options)
 
     this._max_duplexes = Math.pow(2, 31);
     this._max_open = options.max_open;
-    this._max_header_size = options.max_header_size;
     this.duplexes = new Map();
     this._chan = 0;
     this._chan_offset = options.high_channels ? this._max_duplexes : 0;
+    this._parse_handshake_data = options.parse_handshake_data;
+    this.carrier = carrier;
+
+    if (carrier instanceof Http2Sessions)
+    {
+        const http2 = require('http2');
+        const http2_options = options.http2 || {};
+        const response_headers = {
+            ...http2_options.headers,
+            [http2.constants.HTTP2_HEADER_STATUS]: 200,
+            [http2.constants.HTTP2_HEADER_CONTENT_TYPE]: 'application/octet-stream',
+        };
+
+        carrier.server.on('stream', (duplex, headers) =>
+        {
+            if ((this._max_open > 0) && (this.duplexes.size === this._max_open))
+            {
+                this.emit('full');
+                return duplex.respond({
+                    [http2.constants.HTTP2_HEADER_STATUS]: 503
+                }, {
+                    endStream: true
+                });
+            }
+            const channel = Buffer.from(headers['bpmux-channel'], 'base64').readUint32BE();
+            if (this.duplexes.has(channel))
+            {
+                return duplex.respond({
+                    [http2.constants.HTTP2_HEADER_STATUS]: 409
+                }, {
+                    endStream: true
+                });
+            }
+            duplex.cork();
+            this._add_http2_duplex(duplex, channel);
+            this.emit('peer_multiplex', duplex);
+            let handshake_delayed = false;
+            this._parse_http2_handshake(duplex, headers, () =>
+            {
+                handshake_delayed = true;
+                let delayed_handshake;
+                const uncork = duplex.uncork;
+                duplex.uncork = () =>
+                {
+                    duplex.uncork = uncork;
+                    duplex.respond({
+                        ...response_headers,
+                        ...this._make_http2_handshake(delayed_handshake)
+                    });
+                    duplex._handshake_sent = true;
+                    this.emit('handshake_sent', duplex, true);
+                    duplex.emit('handshake_sent', true);
+                    duplex.uncork();
+                };
+                return handshake => {
+                    delayed_handshake = handshake;
+                    duplex.uncork();
+                }
+            });
+            if (handshake_delayed)
+            {
+                this.emit('pre_handshake_sent', duplex, true);
+                duplex.emit('pre_handshake_sent', true);
+            }
+            else
+            {
+                duplex.respond({
+                    ...response_headers,
+                    ...this._make_http2_handshake()
+                });
+                duplex._handshake_sent = true;
+                this.emit('handshake_sent', duplex, true);
+                duplex.emit('handshake_sent', true);
+                duplex.uncork();
+            }
+        });
+
+        let closed = 0;
+        for (const session of [carrier.client, carrier.server])
+        {
+            session.on('close', () =>
+            {
+                // Note: http2 sessions only close once all their
+                // streams have closed so we don't need to go
+                // through the duplexes here and close them
+                if (++closed === 2)
+                {
+                    this.emit('finish');
+                    this.emit('end');
+                    this.emit('close');
+                }
+            });
+
+            session.on('error', err =>
+            {
+                for (const duplex of this.duplexes.values())
+                {
+                    if ((duplex.session === session) &&
+                        !duplex.destroyed &&
+                        (duplex.listenerCount('error') > 0))
+                    {
+                        duplex.emit('error', err);
+                    }
+                }
+                this.emit('error', err);
+            });
+        }
+
+        return;
+    }
+
+    this._max_header_size = options.max_header_size;
     this._finished = false;
     this._ended = false;
     this._header_buffers = [];
     this._header_buffer_len = 0;
     this._reading_duplex = null;
     this._peer_multiplex_options = options.peer_multiplex_options;
-    this._parse_handshake_data = options.parse_handshake_data;
     this._coalesce_writes = options.coalesce_writes;
-    this.carrier = carrier;
     this._sending = false;
     this._send_requested = false;
     this._keep_alive_id = null;
@@ -588,6 +714,14 @@ function BPMux(carrier, options)
 
     var ths = this;
 
+    function check_close()
+    {
+        if (ths._finished && ths._ended)
+        {
+            ths.emit('close');
+        }
+    }
+
     function finish()
     {
         if (ths._finished) { return; }
@@ -606,6 +740,7 @@ function BPMux(carrier, options)
         }
 
         ths.emit('finish');
+        check_close();
     }
 
     function end()
@@ -625,6 +760,7 @@ function BPMux(carrier, options)
         }
 
         ths.emit('end');
+        check_close();
     }
 
     carrier.on('finish', finish);
@@ -635,11 +771,15 @@ function BPMux(carrier, options)
 
     function error(err)
     {
+        // check_remove() is always called when _finished or _ended is set on a duplex,
+        // so it will have been removed from duplex. Apart from above in end(),
+        // where the duplex is destroyed, which we check below anyway (check_remove()
+        // will eventually be called there too via the duplex's 'close' handler).
         for (var duplex of ths.duplexes.values())
         {
-            if ((EventEmitter.listenerCount(duplex, 'error') > 0) &&
-                !(duplex._ended && duplex._finished) &&
-                !duplex.destroyed)
+            if (!duplex._removed && // in case destroyed by previous iteration's error handler
+                !duplex.destroyed &&
+                (duplex.listenerCount('error') > 0))
             {
                 duplex.emit('error', err);
             }
@@ -875,9 +1015,22 @@ BPMux.prototype._process_header = function (buf)
                 duplex._set_remote_free = true;
             }
             duplex._handshake_received = true;
-            handshake_data = this._parse_handshake_data ?
-                this._parse_handshake_data(buf.slice(9)) :
-                buf.slice(9);
+            let handshake_data = buf.slice(9);
+            if (this._parse_handshake_data)
+            {
+                try
+                {
+                    handshake_data = this._parse_handshake_data(handshake_data);
+                }
+                catch (ex)
+                {
+                    if (duplex.listenerCount('error') > 0)
+                    {
+                        duplex.emit('error', ex);
+                    }
+                    this.emit('error', ex);
+                }
+            }
             dhs = duplex._handshake_sent ? null : delay_handshake;
             this.emit('handshake', duplex, handshake_data, dhs);
             duplex.emit('handshake', handshake_data, dhs);
@@ -1183,14 +1336,24 @@ BPMux.prototype.multiplex = function (options)
         throw new Error('full');
     }
 
-    if (this.carrier._writableState.ending)
+    if (this.carrier instanceof Http2Sessions)
     {
-        throw new Error('finished');
+        if (this.carrier.client.closed || this.carrier.client.destroyed)
+        {
+            throw new Error('closed');
+        }
     }
-
-    if (this.carrier._readableState.ended)
+    else
     {
-        throw new Error('ended');
+        if (this.carrier._writableState.ending)
+        {
+            throw new Error('finished');
+        }
+
+        if (this.carrier._readableState.ended)
+        {
+            throw new Error('ended');
+        }
     }
 
     var ths = this, chan, next;
@@ -1199,6 +1362,46 @@ BPMux.prototype.multiplex = function (options)
 
     function done(channel)
     {
+        if (ths.carrier instanceof Http2Sessions)
+        {
+            const http2 = require('http2');
+            const chan = Buffer.alloc(4);
+            chan.writeUInt32BE(channel);
+            const http2_options = options.http2 || {};
+            const duplex = ths.carrier.client.request({
+                [http2.constants.HTTP2_HEADER_PATH]: '/',
+                [http2.constants.HTTP2_HEADER_METHOD]: 'POST',
+                ...http2_options.headers,
+                'bpmux-channel': chan.toString('base64'),
+                ...ths._make_http2_handshake(options.handshake_data)
+            }, {
+                ...http2_options.options,
+                endStream: false,
+                waitForTrailers: true
+            });
+            ths._add_http2_duplex(duplex, channel);
+            setImmediate(() =>
+            {
+                duplex._handshake_sent = true;
+                ths.emit('handshake_sent', duplex, true);
+                duplex.emit('handshake_sent', true);
+            });
+            duplex.on('response', headers => {
+                const status = headers[http2.constants.HTTP2_HEADER_STATUS];
+                if (status !== 200)
+                {
+                    const msg = `peer returned status ${status} for channel ${channel}`;
+                    const err = new Error(msg);
+                    err.status = status;
+                    err.duplex = duplex;
+                    duplex.destroy(err);
+                    return ths.emit('error', err);
+                }
+                ths._parse_http2_handshake(duplex, headers, null);
+            });
+            return duplex;
+        }
+
         var duplex = new BPDuplex(options, ths, channel);
 
         if (!options._delay_handshake)
@@ -1214,7 +1417,7 @@ BPMux.prototype.multiplex = function (options)
 
     if (options.channel !== undefined)
     {
-        return done(options.channel);
+        return this.duplexes.get(options.channel) || done(options.channel);
     }
 
     chan = this._chan;
@@ -1237,4 +1440,76 @@ BPMux.prototype.multiplex = function (options)
     throw new Error('full');
 };
 
+BPMux.prototype._add_http2_duplex = function (duplex, channel)
+{
+    duplex._mux = this;
+    duplex.mux = this;
+    duplex._chan = channel;
+    duplex.get_channel = () => channel;
+    duplex._handshake_sent = false;
+    duplex._handshake_received = false;
+    duplex._error_end = false;
+    this.duplexes.set(channel, duplex);
+    if ((this._max_open > 0) && (this.duplexes.size === this._max_open))
+    {
+        this.emit('full');
+    }
+    duplex.on('close', () =>
+    {
+        this.duplexes.delete(channel);
+        this.emit('removed', duplex);
+    });
+    duplex.peer_error_then_end = function (chunk, encoding, cb)
+    {
+        this._error_end = true;
+        return this.end(chunk, encoding, cb);
+    };
+    duplex.on('wantTrailers', function ()
+    {
+        this.sendTrailers(
+        {
+            'bpmux-error': this._error_end.toString()
+        });
+    });
+    duplex.on('trailers', function (headers)
+    {
+        if (headers['bpmux-error'] === 'true')
+        {
+            this.emit('error', new Error('peer error'));
+        }
+    });
+};
+
+BPMux.prototype._make_http2_handshake = function (handshake)
+{
+    return {
+        'bpmux-handshake': (handshake || Buffer.alloc(0)).toString('base64')
+    };
+};
+
+BPMux.prototype._parse_http2_handshake = function (duplex, headers, delay_handshake)
+{
+    duplex._handshake_received = true;
+    let handshake_data = Buffer.alloc(0);
+    try
+    {
+        handshake_data = Buffer.from(headers['bpmux-handshake'], 'base64');
+        if (this._parse_handshake_data)
+        {
+            handshake_data = this._parse_handshake_data(handshake_data);
+        }
+    }
+    catch (ex)
+    {
+        if (duplex.listenerCount('error') > 0)
+        {
+            duplex.emit('error', ex);
+        }
+        this.emit('error', ex);
+    }
+    this.emit('handshake', duplex, handshake_data, delay_handshake);
+    duplex.emit('handshake', handshake_data, delay_handshake);
+};
+
 exports.BPMux = BPMux;
+exports.Http2Sessions = Http2Sessions;

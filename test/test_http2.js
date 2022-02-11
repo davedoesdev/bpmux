@@ -73,6 +73,10 @@ require('./test_comms')(
     },
     function (conn, cb)
     {
+        if (conn.destroyed)
+        {
+            return cb();
+        }
         conn.on('end', function ()
         {
             this.end();
@@ -112,6 +116,10 @@ require('./test_comms')(
     },
     function (conn, cb)
     {
+        if (conn.destroyed)
+        {
+            return cb();
+        }
         var called = false;
         function cb2()
         {

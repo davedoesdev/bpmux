@@ -80,6 +80,10 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         },
         function (conn, cb)
         {
+            if (conn.destroyed)
+            {
+                return cb();
+            }
             conn.on('end', function ()
             {
                 this.end();
@@ -94,6 +98,10 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         },
         function (conn, cb)
         {
+            if (conn.destroyed)
+            {
+                return cb();
+            }
             conn.on('end', cb);
             conn.end();
         },
@@ -144,6 +152,10 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         },
         function (conn, cb)
         {
+            if (conn.destroyed)
+            {
+                return cb();
+            }
             // we have to listen for 'close' separately in case the actual
             // connection terminates, in which case we don't get 'end'
             // because browser-http2-duplex forgets about it before the
@@ -163,6 +175,10 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         },
         function (conn, cb)
         {
+            if (conn.destroyed)
+            {
+                return cb();
+            }
             conn.on('end', cb);
             conn.end();
         },

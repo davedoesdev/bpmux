@@ -61,7 +61,8 @@ function parse_handshake_data(buf)
     return buf.readUInt32BE(0, true);
 }
 
-function test(ServerBPMux, make_server, end_server, end_server_conn,
+function test(type,
+              ServerBPMux, make_server, end_server, end_server_conn,
               ClientBPMux, make_client_conn, end_client_conn,
               ClientBuffer, client_crypto, client_frame,
               coalesce_writes, fast)
@@ -82,7 +83,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 highWaterMark: fast ? 2048 : 16384
             },
             keep_alive: 1000
-        };
+        },
+        is_passthru = type === 'http2-session';
 
     function csebemr(duplex)
     {
@@ -289,20 +291,20 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         if (server_conn)
         {
-            end_server_conn(server_conn, function ()
+            end_server_conn(server_conn, () => process.nextTick(() =>
             {
                 server_conn = null;
                 check();
-            });
+            }));
         }
 
         if (client_conn)
         {
-            end_client_conn(client_conn, function ()
+            end_client_conn(client_conn, () => process.nextTick(() =>
             {
                 client_conn = null;
                 check();
-            });
+            }));
         }
 
         for (i = 0; i < duplexes.length; i += 1)
@@ -318,15 +320,16 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     {
         return function (initiator_duplex, responder_duplex, cb)
         {
+            const ths = this;
             async.parallel([
                 function (cb)
                 {
-                    f(initiator_duplex, responder_duplex, cb);
+                    f.call(ths, initiator_duplex, responder_duplex, cb);
                 },
 
                 function (cb)
                 {
-                    f(responder_duplex, initiator_duplex, cb);
+                    f.call(ths, responder_duplex, initiator_duplex, cb);
                 }
             ], cb);
         };
@@ -360,7 +363,8 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
     {
         /*jshint validthis: true */
         var responder_chans = [],
-            title = this.test.title;
+            title = this.test.title,
+            ths = this;
 
         return function (i, cb)
         {
@@ -398,7 +402,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
                 if (wait_for_handshake && initiator_duplex)
                 {
-                    f(initiator_duplex, responder_duplex, cb);
+                    f.call(ths, initiator_duplex, responder_duplex, cb);
                 }
             });
 
@@ -420,11 +424,11 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             initiator_duplex.name = initiator_mux.name;
             if ((!wait_for_handshake) || responder_duplex)
             {
-                f(initiator_duplex, wait_for_handshake ? responder_duplex :
-                    {
-                        _mux: responder_mux,
-                        name: responder_mux.name
-                    }, cb);
+                f.call(ths, initiator_duplex, wait_for_handshake ? responder_duplex :
+                       {
+                           _mux: responder_mux,
+                           name: responder_mux.name
+                       }, cb);
             }
         };
     }
@@ -695,9 +699,9 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             if (write_done) { cb(); }
         });
 
-        sender.on('finish', function ()
+        sender.on(is_passthru ? 'close' : 'finish', function ()
         {
-            expect(drains).to.equal(fast ? 726 : 5816);
+            expect(drains).to.equal(fast && !is_passthru ? 726 : 5816);
             write_done = true;
             if (read_done) { cb(); }
         });
@@ -859,19 +863,24 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             n2 = 0,
             called = false,
             error_events;
-        
-        function onerr1(e)
+
+        function check()
         {
-            expect(e).to.equal(err);
-            n1 += 1;
-            expect(n1).to.be.at.most(4);
-            if ((n1 === 4) && (n2 === 3) && !called)
+            if ((n1 === (is_passthru ? 2 : 4)) && (n2 === (is_passthru ? 2 : 3)) && !called)
             {
                 sender.removeListener('error', onerr1);
                 sender._mux.removeListener('error', onerr2);
                 cb();
                 called = true;
             }
+        }
+
+        function onerr1(e)
+        {
+            expect(e).to.equal(err);
+            n1 += 1;
+            expect(n1).to.be.at.most(is_passthru ? 2 : 4);
+            check();
         }
         sender.on('error', onerr1);
 
@@ -879,34 +888,99 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         {
             expect(e).to.equal(err);
             n2 += 1;
-            expect(n2).to.be.at.most(3);
-            if ((n1 === 4) && (n2 === 3) && !called)
+            expect(n2).to.be.at.most(is_passthru ? 2 : 3);
+            check();
+        }
+        sender._mux.on('error', onerr2);
+
+        if (is_passthru)
+        {
+            sender._mux.carrier.client.emit('error', err);
+            sender._mux.carrier.server.emit('error', err);
+        }
+        else
+        {
+            // Readable unpipes on error (_stream_readable.js, function onerror),
+            // which means we'll never get EOF when cleaning up.
+            error_events = sender._mux.carrier._events.error;
+            if (error_events[0].name === 'onerror')
             {
-                sender.removeListener('error', onerr1);
-                sender._mux.removeListener('error', onerr2);
+                error_events.shift();
+            }
+            error_events = sender._mux._in_stream._events.error;
+            if (error_events[0].name === 'onerror')
+            {
+                error_events.shift();
+            }
+
+            sender._mux._in_stream.emit('error', err);
+            sender._mux._out_stream.emit('error', err);
+            sender._mux.carrier.emit('error', err);
+        }
+
+        sender.emit('error', err);
+    }
+    /*jslint unparam: false */
+
+    /*jslint unparam: true */
+    function close_event(sender, receiver, cb)
+    {
+        var n1 = 0,
+            n2 = 0,
+            called = false;
+
+        function check()
+        {
+            if ((n1 === 1) && (n2 == 1) && !called)
+            {
+                sender.removeListener('close', onclose1);
+                sender._mux.removeListener('close', onclose2);
+
+                try
+                {
+                    sender._mux.multiplex();
+                }
+                catch (ex)
+                {
+                    expect(ex.message).to.equal(is_passthru ? 'closed' : 'finished');
+                }
+
                 cb();
                 called = true;
             }
         }
-        sender._mux.on('error', onerr2);
 
-        // Readable unpipes on error (_stream_readable.js, function onerror),
-        // which means we'll never get EOF when cleaning up.
-        error_events = sender._mux.carrier._events.error;
-        if (error_events[0].name === 'onerror')
+        function onclose1()
         {
-            error_events.shift();
+            n1 += 1;
+            expect(n1).to.be.at.most(1);
+            check();
         }
-        error_events = sender._mux._in_stream._events.error;
-        if (error_events[0].name === 'onerror')
-        {
-            error_events.shift();
-        }
+        sender.on('close', onclose1);
 
-        sender._mux._in_stream.emit('error', err);
-        sender._mux._out_stream.emit('error', err);
-        sender._mux.carrier.emit('error', err);
-        sender.emit('error', err);
+        function onclose2()
+        {
+            n2 += 1;
+            expect(n2).to.be.at.most(1);
+            check();
+        }
+        sender._mux.on('close', onclose2);
+
+        if (is_passthru)
+        {
+            sender.on('error', err =>
+            {
+                expect(err.message).to.equal('The stream has been destroyed');
+            });
+            sender._mux.carrier.client.destroy();
+            sender._mux.carrier.server.destroy();
+        }
+        else
+        {
+            csebemr(sender);
+            csebemr(receiver);
+            sender._mux.carrier.destroy();
+        }
     }
     /*jslint unparam: false */
 
@@ -942,7 +1016,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         });
     }
 
-    function emit_error(sender, receiver, cb)
+    function emit_error_if_not_handshake(sender, receiver, cb)
     {
         receiver._mux.on('peer_multiplex', csebemr);
 
@@ -965,13 +1039,15 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             sender_in = [],
             receiver_in = [];
 
-        function check1()
+        function check()
         {
-            expect(sender_in.length).to.be.at.most(4);
-            expect(receiver_in.length).to.be.at.most(4);
+            const expected = is_passthru ? 1 : 4;
 
-            if ((sender_in.length === 4) &&
-                (receiver_in.length === 4))
+            expect(sender_in.length).to.be.at.most(expected);
+            expect(receiver_in.length).to.be.at.most(expected);
+
+            if ((sender_in.length === expected) &&
+                (receiver_in.length === expected))
             {
                 expect(buffer_concat(sender, sender_in).toString('hex')).to.eql(receiver_out.toString('hex'));
                 expect(buffer_concat(receiver, receiver_in).toString('hex')).to.eql(sender_out.toString('hex'));
@@ -987,9 +1063,9 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             if (data)
             {
-                expect(data.length).to.equal(16);
+                expect(data.length).to.equal(is_passthru ? 64 : 16);
                 sender_in.push(data);
-                check1();
+                check();
             }
         });
 
@@ -999,9 +1075,9 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             if (data)
             {
-                expect(data.length).to.equal(16);
+                expect(data.length).to.equal(is_passthru ? 64 : 16);
                 receiver_in.push(data);
-                check1();
+                check();
             }
         });
 
@@ -1134,8 +1210,11 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             sender.on('end', function ()
             {
-                expect(this._remote_free).to.equal(100);
-                expect(this._seq).to.equal(7);
+                if (!is_passthru)
+                {
+                    expect(this._remote_free).to.equal(100);
+                    expect(this._seq).to.equal(7);
+                }
                 cb();
             });
 
@@ -1174,17 +1253,12 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         receiver.once('readable', function ()
         {
-            expect(sender._remote_free).to.equal(0);
-            expect(this.read(150)).to.equal(null);
-
-            this.once('readable', function ()
+            if (is_passthru)
             {
-                expect(sender._remote_free).to.equal(106);
                 expect(this.read(150).toString('hex')).to.equal(buf.toString('hex'));
 
                 this.on('end', function ()
                 {
-                    expect(this._readableState.highWaterMark).to.equal(256);
                     this.end();
                 });
 
@@ -1193,12 +1267,38 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                     expect(this.read()).to.equal(null);
                 });
                 expect(this.read()).to.equal(null);
-            });
+            }
+            else
+            {
+                expect(sender._remote_free).to.equal(0);
+                expect(this.read(150)).to.equal(null);
+
+                this.once('readable', function ()
+                {
+                    expect(sender._remote_free).to.equal(106);
+                    expect(this.read(150).toString('hex')).to.equal(buf.toString('hex'));
+
+                    this.on('end', function ()
+                    {
+                        expect(this._readableState.highWaterMark).to.equal(256);
+                        this.end();
+                    });
+
+                    this.once('readable', function ()
+                    {
+                        expect(this.read()).to.equal(null);
+                    });
+                    expect(this.read()).to.equal(null);
+                });
+            }
         });
 
         sender.on('end', function ()
         {
-            expect(this._remote_free).to.equal(256);
+            if (!is_passthru)
+            {
+                expect(this._remote_free).to.equal(256);
+            }
             cb();
         });
 
@@ -1225,10 +1325,14 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 return;
             }
 
-            expect(duplex._end_pending).to.equal(false);
+            if (!is_passthru)
+            {
+                expect(duplex._end_pending).to.equal(false);
+            }
 
             duplex.on('handshake', function ()
             {
+                expect(receiver_ended).to.equal(false);
                 receiver_handshaken = true;
             });
 
@@ -1236,18 +1340,22 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
             duplex.on('end', function ()
             {
+                expect(receiver_handshaken).to.equal(true);
                 receiver_ended = true;
                 this.end();
             });
 
-            process.nextTick(function ()
+            if (!is_passthru)
             {
-                expect(duplex._end_pending).to.equal(true);
-                expect(sender_handshaken).to.equal(false);
-                expect(receiver_handshaken).to.equal(false);
-                expect(receiver_ended).to.equal(false);
-                sender._send_handshake();
-            });
+                process.nextTick(function ()
+                {
+                    expect(duplex._end_pending).to.equal(true);
+                    expect(sender_handshaken).to.equal(false);
+                    expect(receiver_handshaken).to.equal(false);
+                    expect(receiver_ended).to.equal(false);
+                    sender._send_handshake();
+                });
+            }
         });
 
         sender.on('readable', drain);
@@ -1274,7 +1382,14 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             cb();
         });
 
-        sender._mux.carrier.emit('error', err);
+        if (is_passthru)
+        {
+            sender._mux.carrier.client.emit('error', err);
+        }
+        else
+        {
+            sender._mux.carrier.emit('error', err);
+        }
     }
     /*jslint unparam: false */
 
@@ -1333,44 +1448,63 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
 
         receiver.on('end', function ()
         {
-            expect(s).to.equal('');
+            expect(s).to.equal(is_passthru ? '12345' : '');
             cb();
         });
 
-        receiver._mux._in_stream.pipe(new stream.Writable(
+        if (!is_passthru)
         {
-            write: function (data, encoding, cb)
+            receiver._mux._in_stream.pipe(new stream.Writable(
             {
-                if (receiver._mux._reading_duplex)
+                write: function (data, encoding, cb)
                 {
-                    receiver._mux._reading_duplex.push(null);
+                    if (receiver._mux._reading_duplex)
+                    {
+                        receiver._mux._reading_duplex.push(null);
+                    }
+                    
+                    cb();
                 }
-                
-                cb();
-            }
-        }));
+            }));
+        }
         
         sender.end('12345');
+        sender.on('error', err =>
+        {
+            expect(err.message).to.equal('write after end');
+            if (is_passthru)
+            {
+                // https://github.com/nodejs/node/issues/41898
+                // error event stops http2 stream ending even
+                // after we've already called end()
+                sender.destroy();
+            }
+        });
+        sender.write('6');
     }
 
     function small_high_water_mark(sender, receiver, cb)
     {
         var sender_buf = get_crypto(sender).randomBytes(5),
-            receiver_bufs = [],
-            orig_transform = receiver._mux._in_stream._transform;
+            receiver_bufs = [];
 
-        if (!orig_transform.replaced)
+        if (!is_passthru)
         {
-            receiver._mux._in_stream._transform = function (chunk, enc, cont)
+            const orig_transform = receiver._mux._in_stream._transform;
+
+            if (!orig_transform.replaced)
             {
-                var ths = this;
-                // test re-assembly of headers
-                orig_transform.call(this, chunk.slice(0, 1), enc, function ()
+                receiver._mux._in_stream._transform = function (chunk, enc, cont)
                 {
-                    orig_transform.call(ths, chunk.slice(1), enc, cont);
-                });
-            };
-            receiver._mux._in_stream._transform.replaced = true;
+                    var ths = this;
+                    // test re-assembly of headers
+                    orig_transform.call(this, chunk.slice(0, 1), enc, function ()
+                    {
+                        orig_transform.call(ths, chunk.slice(1), enc, cont);
+                    });
+                };
+                receiver._mux._in_stream._transform.replaced = true;
+            }
         }
 
         receiver.on('readable', function ()
@@ -1378,7 +1512,10 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             var data = this.read();
             if (data !== null)
             {
-                expect(data.length).to.equal(1);
+                if (!is_passthru) // we don't get to provide http2 streams with options
+                {
+                    expect(data.length).to.equal(1);
+                }
                 receiver_bufs.push(data);
             }
         });
@@ -1674,11 +1811,14 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             });
         }
 
-        calln('should support fragmented data',
-              fragmented_data);
+        if (!is_passthru)
+        {
+            calln('should support fragmented data',
+                  fragmented_data);
 
-        calln('should support fragmented data when read(0) sends status message',
-              fragmented_data_with_read_zero);
+            calln('should support fragmented data when read(0) sends status message',
+                  fragmented_data_with_read_zero);
+        }
 
         calln(new WithOptions('should support not parsing handshake data',
                               {
@@ -1707,34 +1847,37 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                               }),
               single_byte);
 
-        calln(new WithOptions('should emit an error if handshake message length too short',
-                              {
-                                  peer_multiplex_options: {
+        if (!is_passthru)
+        {
+            calln(new WithOptions('should emit an error if handshake message length too short',
+                                  {
+                                      peer_multiplex_options: {
+                                          _delay_handshake: true
+                                      }
+                                  },
+                                  {
                                       _delay_handshake: true
-                                  }
-                              },
-                              {
-                                  _delay_handshake: true
-                              }),
-              short_handshake_message,
-              null,
-              true);
+                                  }),
+                  short_handshake_message,
+                  null,
+                  true);
 
-        calln(new WithOptions('should emit an error if pre-handshake message length too short',
-                              {
-                                  peer_multiplex_options: {
+            calln(new WithOptions('should emit an error if pre-handshake message length too short',
+                                  {
+                                      peer_multiplex_options: {
+                                          _delay_handshake: true
+                                      }
+                                  },
+                                  {
                                       _delay_handshake: true
-                                  }
-                              },
-                              {
-                                  _delay_handshake: true
-                              }),
-              short_pre_handshake_message,
-              null,
-              true);
+                                  }),
+                  short_pre_handshake_message,
+                  null,
+                  true);
 
-        calln('should emit an error if status message length too short',
-              short_status_message);
+            calln('should emit an error if status message length too short',
+                  short_status_message);
+        }
 
         calln(new WithOptions('should support small high-water marks',
                               {
@@ -1776,9 +1919,12 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
               null,
               true);
 
-        calln('should emit an error when unknown message type is received',
-              unknown_type,
-              1);
+        if (!is_passthru)
+        {
+            calln('should emit an error when unknown message type is received',
+                  unknown_type,
+                  1);
+        }
 
         calln('should write a single byte to multiplexed streams',
               single_byte);
@@ -1792,8 +1938,11 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         calln('should support frame-stream over multiplexed streams',
               frame_stream);
 
-        calln('should be able to delay status messages',
-              delay_status);
+        if (!is_passthru)
+        {
+            calln('should be able to delay status messages',
+                  delay_status);
+        }
 
         calln('should handle write backpressure',
               write_backpressure,
@@ -1811,21 +1960,32 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
               error_event,
               1);
 
-        calln('should emit an error when unknown message is received',
-              unknown_message,
+        calln('should expose close events',
+              close_event,
               1);
+
+        if (!is_passthru)
+        {
+            calln('should emit an error when unknown message is received',
+                  unknown_message,
+                  1);
+        }
 
         calln(new WithOptions('should support default options'),
               multi_byte,
               1);
 
-        calln(new WithOptions('should emit an error if first message is not handshake',
-                              null,
-                              {
-                                  _delay_handshake: true
-                              }),
-              emit_error,
-              1);
+
+        if (!is_passthru)
+        {
+            calln(new WithOptions('should emit an error if first message is not handshake',
+                                  null,
+                                  {
+                                      _delay_handshake: true
+                                  }),
+                  emit_error_if_not_handshake,
+                  1);
+        }
 
         calln(new WithOptions('should support a maximum write size',
                               {
@@ -1842,36 +2002,39 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
               1,
               true);
 
-        calln(new WithOptions('should detect read overflow',
-                              {
-                                  peer_multiplex_options: {
+        if (!is_passthru)
+        {
+            calln(new WithOptions('should detect read overflow',
+                                  {
+                                      peer_multiplex_options: {
+                                          highWaterMark: 100
+                                      }
+                                  },
+                                  {
                                       highWaterMark: 100
-                                  }
-                              },
-                              {
-                                  highWaterMark: 100
-                              }),
-              read_overflow,
-              1);
+                                  }),
+                  read_overflow,
+                  1);
 
-        calln(new WithOptions('should support disabling read overflow',
-                              {
-                                  peer_multiplex_options: {
+            calln(new WithOptions('should support disabling read overflow',
+                                  {
+                                      peer_multiplex_options: {
+                                          highWaterMark: 100,
+                                          check_read_overflow: false
+                                      }
+                                  },
+                                  {
                                       highWaterMark: 100,
                                       check_read_overflow: false
-                                  }
-                              },
-                              {
-                                  highWaterMark: 100,
-                                  check_read_overflow: false
-                              }),
-              disable_read_overflow,
-              1);
+                                  }),
+                  disable_read_overflow,
+                  1);
 
-        calln('should not write zero length data',
-              no_zero_length_data,
-              1,
-              true);
+            calln('should not write zero length data',
+                  no_zero_length_data,
+                  1,
+                  true);
+        }
 
         calln(new WithOptions('should wrap sequence numbers',
                               {
@@ -1904,16 +2067,19 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
               1,
               true);
 
-        calln('should send keep-alive messages',
-              keep_alive,
-              1);
+        if (!is_passthru)
+        {
+            calln('should send keep-alive messages',
+                  keep_alive,
+                  1);
 
-        calln(new WithOptions('should be able to disable keep-alive',
-                              {
-                                  keep_alive: false
-                              }),
-              keep_alive_disabled,
-              1);
+            calln(new WithOptions('should be able to disable keep-alive',
+                                  {
+                                      keep_alive: false
+                                  }),
+                  keep_alive_disabled,
+                  1);
+        }
     }
 
     setup(1);
@@ -1950,11 +2116,75 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         });
     });
 
+    it(new WithOptions('should catch handshake parsing exceptions',
+                       {
+                           parse_handshake_data: function (buf)
+                           {
+                               throw new Error('parse');
+                           }
+                       }),
+    function (cb)
+    {
+        let count = 0;
+
+        function check(err)
+        {
+            expect(err.message).to.equal('parse');
+            count++;
+        }
+        client_mux.once('error', check);
+        server_mux.once('error', check);
+
+        var duplex = client_mux.multiplex(
+        {
+            handshake_data: ClientBuffer.from('foo')
+        });
+        duplex.once('error', function (err)
+        {
+            check(err);
+            csebemr(this);
+        });
+        duplex.on('handshake', function (handshake_data)
+        {
+            expect(handshake_data.toString()).to.equal('bar');
+            expect(count).to.equal(4);
+            cb();
+        });
+
+        server_mux.on('peer_multiplex', function (duplex)
+        {
+            duplex.once('error', function (err)
+            {
+                check(err);
+                csebemr(this);
+            });
+        });
+        server_mux.on('handshake', function (duplex, handshake_data, delay_handshake)
+        {
+            expect(handshake_data.toString()).to.equal('foo');
+            csebemr(duplex);
+            delay_handshake()(Buffer.from('bar'));
+        });
+    });
+
     it('should be able to specify channel number', function (cb)
     {
+        if (is_passthru)
+        {
+            function onerr(err)
+            {
+                expect(err.message).to.be.oneOf([
+                    'peer returned status 409 for channel 100',
+                    'peer returned status 409 for channel 200'
+                ]);
+            }
+            client_mux.on('error', onerr);
+            server_mux.on('error', onerr);
+        }
+
         var c100 = false, s100 = false, c200 = false, s200 = false;
 
-        function check1()
+        function check()
         {
             if (c100 && s100 && c200 && s200)
             {
@@ -1962,81 +2192,137 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             }
         }
 
-        var client_duplex100 = client_mux.multiplex(
+        function client100()
         {
-            channel: 100
-        });
-        add_duplex(client_duplex100);
-        expect(client_duplex100.get_channel()).to.equal(100);
-        client_duplex100.write('a');
-        client_duplex100.on('readable', function ()
-        {
-            var data = this.read();
-            if (data !== null)
+            var client_duplex100 = client_mux.multiplex(
             {
-                expect(c100).to.equal(false);
-                c100 = true;
-                expect(data.toString()).to.equal('b');
-                check1();
+                channel: 100
+            });
+            add_duplex(client_duplex100);
+            expect(client_duplex100.get_channel()).to.equal(100);
+            client_duplex100.write('a');
+            client_duplex100.on('readable', function ()
+            {
+                var data = this.read();
+                if (data !== null)
+                {
+                    expect(c100).to.equal(false);
+                    c100 = true;
+                    expect(data.toString()).to.equal('b');
+                    check();
+                }
+            });
+            if (is_passthru)
+            {
+                client_duplex100.on('error', function (err)
+                {
+                    expect(err.message).to.equal('peer returned status 409 for channel 100');
+                    expect(err.status).to.equal(409);
+                    expect(err.duplex.get_channel()).to.equal(100);
+                    this.on('close', () => setTimeout(client100, Math.random() * 2000));
+                });
             }
-        });
+        }
+        client100();
 
-        var server_duplex100 = server_mux.multiplex(
+        function server100()
         {
-            channel: 100
-        });
-        add_duplex(server_duplex100);
-        expect(server_duplex100.get_channel()).to.equal(100);
-        server_duplex100.write('b');
-        server_duplex100.on('readable', function ()
-        {
-            var data = this.read();
-            if (data !== null)
+            var server_duplex100 = server_mux.multiplex(
             {
-                expect(s100).to.equal(false);
-                s100 = true;
-                expect(data.toString()).to.equal('a');
-                check1();
+                channel: 100
+            });
+            add_duplex(server_duplex100);
+            expect(server_duplex100.get_channel()).to.equal(100);
+            server_duplex100.write('b');
+            server_duplex100.on('readable', function ()
+            {
+                var data = this.read();
+                if (data !== null)
+                {
+                    expect(s100).to.equal(false);
+                    s100 = true;
+                    expect(data.toString()).to.equal('a');
+                    check();
+                }
+            });
+            if (is_passthru)
+            {
+                server_duplex100.on('error', function (err)
+                {
+                    expect(err.message).to.equal('peer returned status 409 for channel 100');
+                    expect(err.status).to.equal(409);
+                    expect(err.duplex.get_channel()).to.equal(100);
+                    this.on('close', () => setTimeout(server100, Math.random() * 2000));
+                });
             }
-        });
+        }
+        server100();
 
-        var client_duplex200 = client_mux.multiplex(
+        function client200()
         {
-            channel: 200
-        });
-        add_duplex(client_duplex200);
-        expect(client_duplex200.get_channel()).to.equal(200);
-        client_duplex200.write('c');
-        client_duplex200.on('readable', function ()
-        {
-            var data = this.read();
-            if (data !== null)
+            var client_duplex200 = client_mux.multiplex(
             {
-                expect(c200).to.equal(false);
-                c200 = true;
-                expect(data.toString()).to.equal('d');
-                check1();
+                channel: 200
+            });
+            add_duplex(client_duplex200);
+            expect(client_duplex200.get_channel()).to.equal(200);
+            client_duplex200.write('c');
+            client_duplex200.on('readable', function ()
+            {
+                var data = this.read();
+                if (data !== null)
+                {
+                    expect(c200).to.equal(false);
+                    c200 = true;
+                    expect(data.toString()).to.equal('d');
+                    check();
+                }
+            });
+            if (is_passthru)
+            {
+                client_duplex200.on('error', function (err)
+                {
+                    expect(err.message).to.equal('peer returned status 409 for channel 200');
+                    expect(err.status).to.equal(409);
+                    expect(err.duplex.get_channel()).to.equal(200);
+                    this.on('close', () => setTimeout(client200, Math.random() * 2000));
+                });
             }
-        });
+        }
+        client200();
 
-        var server_duplex200 = server_mux.multiplex(
+        function server200()
         {
-            channel: 200
-        });
-        add_duplex(server_duplex200);
-        expect(server_duplex200.get_channel()).to.equal(200);
-        server_duplex200.write('d');
-        server_duplex200.on('readable', function ()
-        {
-            var data = this.read();
-            if (data !== null)
+            var server_duplex200 = server_mux.multiplex(
             {
-                expect(s200).to.equal(false);
-                s200 = true;
-                expect(data.toString()).to.equal('c');
-                check1();
+                channel: 200
+            });
+            add_duplex(server_duplex200);
+            expect(server_duplex200.get_channel()).to.equal(200);
+            server_duplex200.write('d');
+            server_duplex200.on('readable', function ()
+            {
+                var data = this.read();
+                if (data !== null)
+                {
+                    expect(s200).to.equal(false);
+                    s200 = true;
+                    expect(data.toString()).to.equal('c');
+                    check();
+                }
+            });
+            if (is_passthru)
+            {
+                server_duplex200.on('error', function (err)
+                {
+                    expect(err.message).to.equal('peer returned status 409 for channel 200');
+                    expect(err.status).to.equal(409);
+                    expect(err.duplex.get_channel()).to.equal(200);
+                    this.on('close', () => setTimeout(server200, Math.random() * 2000));
+                });
             }
-        });
+        }
+        server200();
     });
 
     it('should be able to use a control channel to ask for new duplexes', function (cb)
@@ -2094,7 +2380,10 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         client_duplex.name = 'client';
         add_duplex(client_duplex);
         client_duplex.end('x');
-        client_duplex._send_handshake();
+        if (!is_passthru)
+        {
+            client_duplex._send_handshake();
+        }
 
         client_duplex.on('readable', function ()
         {
@@ -2130,6 +2419,13 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                        }),
     function (cb)
     {
+        if (is_passthru)
+        {
+            client_mux.on('error', function (err)
+            {
+                expect(err.message.startsWith('peer returned status 503 for channel')).to.equal(true);
+            });
+        }
         var count = 0, third_server, third_client;
         server_mux.on('peer_multiplex', csebemr);
         server_mux.on('peer_multiplex', function (duplex)
@@ -2171,12 +2467,27 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 third_server.end();
             });
         });
+        function handle_err(duplex)
+        {
+            if (is_passthru)
+            {
+                duplex.on('error', function (err)
+                {
+                    expect(err.message.startsWith('peer returned status 503 for channel')).to.equal(true);
+                });
+            }
+            else
+            {
+                csebemr(duplex);
+            }
+        }
+
         client_mux._max_open = 0;
-        csebemr(client_mux.multiplex());
-        csebemr(client_mux.multiplex());
+        handle_err(client_mux.multiplex());
+        handle_err(client_mux.multiplex());
         third_client = client_mux.multiplex();
-        csebemr(third_client);
-        csebemr(client_mux.multiplex());
+        handle_err(third_client);
+        handle_err(client_mux.multiplex());
     });
 
     it(new WithOptions('should be able to limit header size',
@@ -2201,10 +2512,23 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
                 cb();
             });
 
-            csebemr(client_mux.multiplex(
+            const duplex2 = client_mux.multiplex(
             {
                 handshake_data: Buffer.alloc(1024 * 1024)
-            }));
+            });
+
+            if (is_passthru)
+            {
+                duplex2.on('error', function (err)
+                {
+                    expect(err.message).to.equal('Stream closed with error code NGHTTP2_REFUSED_STREAM');
+                    cb();
+                });
+            }
+            else
+            {
+                csebemr(duplex2);
+            }
         });
     });
 
@@ -2279,111 +2603,117 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         });
 
         duplex.peer_error_then_end();
-        setTimeout(function ()
+        if (!is_passthru)
         {
-            duplex._send_handshake();
-        }, 500);
+            setTimeout(function ()
+            {
+                duplex._send_handshake();
+            }, 500);
+        }
     });
 
-    it('should not send end after finished', function (cb)
+    if (!is_passthru)
     {
-        var duplex = client_mux.multiplex();
-        csebemr(duplex);
-
-        client_mux.on('finish', function ()
+        it('should not send end after finished', function (cb)
         {
-            client_mux._out_stream.write = function ()
-            {
-                cb(new Error('should not be called'));
-            };
-
-            client_mux._send_end(duplex);
-        });
-
-        server_mux.on('handshake', function (duplex)
-        {
+            var duplex = client_mux.multiplex();
             csebemr(duplex);
-        });
 
-        end_server_conn(server_conn, function ()
-        {
-            server_conn = null;
-        });
-
-        end_client_conn(client_conn, function ()
-        {
-            client_conn = null;
-        });
-
-        setTimeout(cb, 1000);
-    });
-
-    it('should not send handshake after finished', function (cb)
-    {
-        var duplex = client_mux.multiplex(
-        {
-            _delay_handshake: true
-        });
-        csebemr(duplex);
-
-        client_mux.on('finish', function ()
-        {
-            duplex._send_handshake();
-        });
-
-        server_mux.on('handshake', function ()
-        {
-            cb(new Error('should not be called'));
-        });
-
-        end_server_conn(server_conn, function ()
-        {
-            server_conn = null;
-        });
-
-        end_client_conn(client_conn, function ()
-        {
-            client_conn = null;
-        });
-
-        setTimeout(cb, 1000);
-    });
-
-    it('should not send data after finished', function (cb)
-    {
-        var duplex = client_mux.multiplex();
-        csebemr(duplex);
-
-        client_mux.on('finish', function ()
-        {
-            Object.defineProperty(client_mux._out_stream, '_writeableState',
+            client_mux.on('finish', function ()
             {
-                get: function ()
+                client_mux._out_stream.write = function ()
                 {
                     cb(new Error('should not be called'));
-                }
+                };
+
+                client_mux._send_end(duplex);
             });
 
-            client_mux.__send();
+            server_mux.on('handshake', function (duplex)
+            {
+                csebemr(duplex);
+            });
+
+            end_server_conn(server_conn, function ()
+            {
+                server_conn = null;
+            });
+
+            end_client_conn(client_conn, function ()
+            {
+                client_conn = null;
+            });
+
+            setTimeout(cb, 1000);
         });
 
-        server_mux.on('handshake', function (duplex)
+        it('should not send handshake after finished', function (cb)
         {
+            var duplex = client_mux.multiplex(
+            {
+                _delay_handshake: true
+            });
             csebemr(duplex);
+
+            client_mux.on('finish', function ()
+            {
+                duplex._send_handshake();
+            });
+
+            server_mux.on('handshake', function ()
+            {
+                cb(new Error('should not be called'));
+            });
+
+            end_server_conn(server_conn, function ()
+            {
+                server_conn = null;
+            });
+
+            end_client_conn(client_conn, function ()
+            {
+                client_conn = null;
+            });
+
+            setTimeout(cb, 1000);
         });
 
-        end_server_conn(server_conn, function ()
+        it('should not send data after finished', function (cb)
         {
-            server_conn = null;
-        });
+            var duplex = client_mux.multiplex();
+            csebemr(duplex);
 
-        end_client_conn(client_conn, function ()
-        {
-            client_conn = null;
-        });
+            client_mux.on('finish', function ()
+            {
+                Object.defineProperty(client_mux._out_stream, '_writeableState',
+                {
+                    get: function ()
+                    {
+                        return cb(new Error('should not be called'));
+                    }
+                });
 
-        setTimeout(cb, 1000);
-    });
+                client_mux.__send();
+            });
+
+            server_mux.on('handshake', function (duplex)
+            {
+                csebemr(duplex);
+            });
+
+            end_server_conn(server_conn, function ()
+            {
+                server_conn = null;
+            });
+
+            end_client_conn(client_conn, function ()
+            {
+                client_conn = null;
+            });
+
+            setTimeout(cb, 1000);
+        });
+    }
 
     it('should not remove duplex after close until end message received', function (cb)
     {
@@ -2419,7 +2749,7 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
             client_mux.on('removed', function (duplex)
             {
                 expect(duplex).to.equal(client_duplex);
-                expect(server_ended).to.equal(true);
+                expect(server_ended).to.equal(!is_passthru);
                 cb();
             });
 
@@ -2480,42 +2810,45 @@ function test(ServerBPMux, make_server, end_server, end_server_conn,
         csebemr(client_mux.multiplex());
     });
 
-    it('should not reset duplex remote free', function (cb)
+    if (!is_passthru)
     {
-        server_mux.on('handshake', function (duplex)
+        it('should not reset duplex remote free', function (cb)
         {
-            csebemr(duplex);
-            duplex.on('readable', function ()
+            server_mux.on('handshake', function (duplex)
             {
-                var data = this.read();
-                if (data === null)
+                csebemr(duplex);
+                duplex.on('readable', function ()
                 {
-                    return;
-                }
-                expect(data.toString()).to.equal('a');
+                    var data = this.read();
+                    if (data === null)
+                    {
+                        return;
+                    }
+                    expect(data.toString()).to.equal('a');
+                });
             });
+
+            var duplex = client_mux.multiplex();
+            csebemr(duplex);
+
+            var orig_write = client_mux._out_stream.write;
+
+            client_mux._out_stream.write = function ()
+            {
+                duplex._remote_free = 10;
+                duplex._set_remote_free = true;
+                return orig_write.apply(this, arguments);
+            };
+
+            duplex.write('a', function ()
+            {
+                expect(duplex._remote_free).to.equal(10);
+                cb();
+            });
+
+            duplex.end();
         });
-
-        var duplex = client_mux.multiplex();
-        csebemr(duplex);
-
-        var orig_write = client_mux._out_stream.write;
-
-        client_mux._out_stream.write = function ()
-        {
-            duplex._remote_free = 10;
-            duplex._set_remote_free = true;
-            return orig_write.apply(this, arguments);
-        };
-
-        duplex.write('a', function ()
-        {
-            expect(duplex._remote_free).to.equal(10);
-            cb();
-        });
-
-        duplex.end();
-    });
+    }
 
     it('should prevent starvation', function (cb)
     {
@@ -2598,7 +2931,8 @@ module.exports = function(
     {
         describe(type + ' coa=' + coa, function ()
         {
-            test(ServerBPMux, make_server, end_server, end_server_conn,
+            test(type,
+                 ServerBPMux, make_server, end_server, end_server_conn,
                  ClientBPMux, make_client_conn, end_client_conn,
                  ClientBuffer, client_crypto, client_frame,
                  coa, fast);
