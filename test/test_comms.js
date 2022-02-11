@@ -1469,7 +1469,7 @@ function test(type,
         }
         
         sender.end('12345');
-        sender.on('error', err =>
+        sender.once('error', err =>
         {
             expect(err.message).to.equal('write after end');
             if (is_passthru)
