@@ -611,14 +611,17 @@ function BPMux(carrier, options)
                 duplex.uncork = () =>
                 {
                     duplex.uncork = uncork;
-                    duplex.respond({
-                        ...response_headers,
-                        ...this._make_http2_handshake(delayed_handshake)
-                    });
-                    duplex._handshake_sent = true;
-                    this.emit('handshake_sent', duplex, true);
-                    duplex.emit('handshake_sent', true);
-                    duplex.uncork();
+                    if (!duplex.destroyed) // Node 12 calls uncork on end even if destroyed
+                    {
+                        duplex.respond({
+                            ...response_headers,
+                            ...this._make_http2_handshake(delayed_handshake)
+                        });
+                        duplex._handshake_sent = true;
+                        this.emit('handshake_sent', duplex, true);
+                        duplex.emit('handshake_sent', true);
+                        duplex.uncork();
+                    }
                 };
                 return handshake => {
                     delayed_handshake = handshake;

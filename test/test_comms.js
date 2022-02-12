@@ -97,7 +97,8 @@ function test(type,
                 'write after end',
                 'write EPIPE',
                 'read ECONNRESET',
-                'write ECONNRESET'
+                'write ECONNRESET',
+                'Cannot call write after a stream was destroyed'
             ]);
             if (err.message === 'carrier stream ended before end message received')
             {
@@ -228,7 +229,8 @@ function test(type,
                 'This socket has been ended by the other party',
                 'read ECONNRESET',
                 'write ECONNRESET',
-                'write EPIPE'
+                'write EPIPE',
+                'Cannot call write after a stream was destroyed'
             ]);
         }
 
