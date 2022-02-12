@@ -944,7 +944,7 @@ function test(type,
                 }
                 catch (ex)
                 {
-                    expect(ex.message).to.equal(is_passthru ? 'closed' : 'finished');
+                    expect(ex.message).to.equal('closed');
                 }
 
                 cb();

@@ -1348,6 +1348,11 @@ BPMux.prototype.multiplex = function (options)
     }
     else
     {
+        if (this.carrier.destroyed)
+        {
+            throw new Error('closed');
+        }
+
         if (this.carrier._writableState.ending)
         {
             throw new Error('finished');
