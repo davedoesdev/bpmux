@@ -189,6 +189,8 @@ BPMux = require('bpmux').BPMux;
 
 ## Comparison
 
+### [multiplex](https://github.com/maxogden/multiplex) library
+
 Multiplexing libraries which don't exert backpressure on individual streams
 suffer from starvation. A stream which doesn't read its data stops other streams
 on the multiplex getting their data.
@@ -286,6 +288,57 @@ data 1 16384
 ...
 ```
 
+### HTTP/2 sessions
+
+[HTTP/2 sessions](https://nodejs.org/dist/latest-v16.x/docs/api/http2.html#class-http2session)
+do exert backpressure on individual streams, as this test shows:
+
+```javascript
+const fs = require('fs');
+const http2 = require('http2');
+
+const server = http2.createServer();
+server.on('stream', (stream, headers) => {
+    stream.on('data', function (d) {
+        console.log('data', headers[':path'], d.length);
+        if (headers[':path'] === '/stream1') {
+            this.pause();
+        }
+    });
+});
+server.listen(8000);
+
+const client = http2.connect('http://localhost:8000');
+
+const stream1 = client.request({ ':path': '/stream1' }, { endStream: false });
+const stream2 = client.request({ ':path': '/stream2' }, { endStream: false });
+
+fs.createReadStream('/dev/urandom').pipe(stream1);
+fs.createReadStream('/dev/urandom').pipe(stream2);
+```
+
+```
+data /stream1 16384
+data /stream2 16384
+data /stream2 16348
+data /stream2 35
+data /stream2 16384
+data /stream2 16384
+data /stream2 1
+data /stream2 16384
+data /stream2 16366
+data /stream2 18
+data /stream2 16384
+data /stream2 16382
+data /stream2 2
+data /stream2 16384
+...
+```
+
+If you pass a pair of sessions (one client, one server) to [`BPMux()`](#bpmuxcarrier-options),
+they will be used for multiplexing streams, with no additional overhead. This is useful if
+you want to use the bpmux API.
+
 ## Errors
 
 bpmux will emit `error` events on multiplexed streams if their underlying
@@ -371,6 +424,7 @@ grunt lint
 
 <a name="tableofcontents"></a>
 
+- <a name="toc_new-http2sessionsclient-server"></a>[new Http2Sessions](#new-http2sessionsclient-server)
 - <a name="toc_bpmuxcarrier-options"></a>[BPMux](#bpmuxcarrier-options)
 - <a name="toc_bpmuxprototypemultiplexoptions"></a><a name="toc_bpmuxprototype"></a>[BPMux.prototype.multiplex](#bpmuxprototypemultiplexoptions)
 - <a name="toc_bpmuxeventspeer_multiplexduplex"></a><a name="toc_bpmuxevents"></a>[BPMux.events.peer_multiplex](#bpmuxeventspeer_multiplexduplex)
@@ -383,13 +437,28 @@ grunt lint
 - <a name="toc_bpmuxeventsremovedduplex"></a>[BPMux.events.removed](#bpmuxeventsremovedduplex)
 - <a name="toc_bpmuxeventskeep_alive"></a>[BPMux.events.keep_alive](#bpmuxeventskeep_alive)
 
+## new Http2Sessions(client, server)
+
+> Class for holding a pair of HTTP/2 sessions.
+
+Pass this to [BPMux()](#bpmuxcarrier-options) and it will use the sessions'
+existing support for multiplexing streams. Both [client](https://nodejs.org/dist/latest-v16.x/docs/api/http2.html#class-clienthttp2session) and [server](https://nodejs.org/dist/latest-v16.x/docs/api/http2.html#class-serverhttp2session) sessions
+are required because HTTP/2 push streams are unidirectional.
+
+**Parameters:**
+
+- `{ClientHttp2Session} client` Client session
+- `{ServerHttp2Session} server` Server session
+
+<sub>Go: [TOC](#tableofcontents)</sub>
+
 ## BPMux(carrier, [options])
 
 > Constructor for a `BPMux` object which multiplexes more than one [`stream.Duplex`](https://nodejs.org/api/stream.html#stream_class_stream_duplex) over a carrier `Duplex`.
 
 **Parameters:**
 
-- `{Duplex} carrier` The `Duplex` stream over which other `Duplex` streams will be multiplexed.
+- `{Duplex | Http2Sessions} carrier` The `Duplex` stream over which other `Duplex` streams will be multiplexed.
 - `{Object} [options]` Configuration options. This is passed down to [`frame-stream`](https://github.com/davedoesdev/frame-stream). It also supports the following additional properties:
   - `{Object} [peer_multiplex_options]` When your `BPMux` object detects a new multiplexed stream from the peer on the carrier, it creates a new `Duplex` and emits a [`peer_multiplex`](#bpmuxeventspeer_multiplexduplex) event. When it creates the `Duplex`, it uses `peer_multiplex_options` to configure it with the following options:
 

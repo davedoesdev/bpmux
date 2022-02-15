@@ -427,10 +427,10 @@ function test(type,
             if ((!wait_for_handshake) || responder_duplex)
             {
                 f.call(ths, initiator_duplex, wait_for_handshake ? responder_duplex :
-                       {
-                           _mux: responder_mux,
-                           name: responder_mux.name
-                       }, cb);
+                    {
+                        _mux: responder_mux,
+                        name: responder_mux.name
+                    }, cb);
             }
         };
     }
@@ -2120,7 +2120,7 @@ function test(type,
 
     it(new WithOptions('should catch handshake parsing exceptions',
                        {
-                           parse_handshake_data: function (buf)
+                           parse_handshake_data: function ()
                            {
                                throw new Error('parse');
                            }
@@ -2173,13 +2173,13 @@ function test(type,
     {
         if (is_passthru)
         {
-            function onerr(err)
+            const onerr = err =>
             {
                 expect(err.message).to.be.oneOf([
                     'peer returned status 409 for channel 100',
                     'peer returned status 409 for channel 200'
                 ]);
-            }
+            };
             client_mux.on('error', onerr);
             server_mux.on('error', onerr);
         }

@@ -190,6 +190,8 @@ BPMux = require('bpmux').BPMux;
 
 ## Comparison
 
+### [multiplex](https://github.com/maxogden/multiplex) library
+
 Multiplexing libraries which don't exert backpressure on individual streams
 suffer from starvation. A stream which doesn't read its data stops other streams
 on the multiplex getting their data.
@@ -286,6 +288,57 @@ data 1 16384
 data 1 16384
 ...
 ```
+
+### HTTP/2 sessions
+
+[HTTP/2 sessions](https://nodejs.org/dist/latest-v16.x/docs/api/http2.html#class-http2session)
+do exert backpressure on individual streams, as this test shows:
+
+```javascript
+const fs = require('fs');
+const http2 = require('http2');
+
+const server = http2.createServer();
+server.on('stream', (stream, headers) => {
+    stream.on('data', function (d) {
+        console.log('data', headers[':path'], d.length);
+        if (headers[':path'] === '/stream1') {
+            this.pause();
+        }
+    });
+});
+server.listen(8000);
+
+const client = http2.connect('http://localhost:8000');
+
+const stream1 = client.request({ ':path': '/stream1' }, { endStream: false });
+const stream2 = client.request({ ':path': '/stream2' }, { endStream: false });
+
+fs.createReadStream('/dev/urandom').pipe(stream1);
+fs.createReadStream('/dev/urandom').pipe(stream2);
+```
+
+```
+data /stream1 16384
+data /stream2 16384
+data /stream2 16348
+data /stream2 35
+data /stream2 16384
+data /stream2 16384
+data /stream2 1
+data /stream2 16384
+data /stream2 16366
+data /stream2 18
+data /stream2 16384
+data /stream2 16382
+data /stream2 2
+data /stream2 16384
+...
+```
+
+If you pass a pair of sessions (one client, one server) to [`BPMux()`](#bpmuxcarrier-options),
+they will be used for multiplexing streams, with no additional overhead. This is useful if
+you want to use the bpmux API.
 
 ## Errors
 
@@ -389,6 +442,16 @@ var util = require('util'),
     TYPE_ERROR_END = 6,
     TYPE_KEEP_ALIVE = 7;
 
+/**
+Class for holding a pair of HTTP/2 sessions.
+
+Pass this to [BPMux()](#bpmuxcarrier-options) and it will use the sessions'
+existing support for multiplexing streams. Both [client](https://nodejs.org/dist/latest-v16.x/docs/api/http2.html#class-clienthttp2session) and [server](https://nodejs.org/dist/latest-v16.x/docs/api/http2.html#class-serverhttp2session) sessions
+are required because HTTP/2 push streams are unidirectional.
+
+@param {ClientHttp2Session} client Client session
+@param {ServerHttp2Session} server Server session
+*/
 class Http2Sessions
 {
     constructor(client, server)
@@ -529,7 +592,7 @@ Constructor for a `BPMux` object which multiplexes more than one [`stream.Duplex
 @constructor
 @extends events.EventEmitter
 
-@param {Duplex} carrier The `Duplex` stream over which other `Duplex` streams will be multiplexed.
+@param {Duplex|Http2Sessions} carrier The `Duplex` stream over which other `Duplex` streams will be multiplexed.
 
 @param {Object} [options] Configuration options. This is passed down to [`frame-stream`](https://github.com/davedoesdev/frame-stream). It also supports the following additional properties:
 - `{Object} [peer_multiplex_options]` When your `BPMux` object detects a new multiplexed stream from the peer on the carrier, it creates a new `Duplex` and emits a [`peer_multiplex`](#bpmuxeventspeer_multiplexduplex) event. When it creates the `Duplex`, it uses `peer_multiplex_options` to configure it with the following options:
@@ -623,10 +686,11 @@ function BPMux(carrier, options)
                         duplex.uncork();
                     }
                 };
-                return handshake => {
+                return handshake =>
+                {
                     delayed_handshake = handshake;
                     duplex.uncork();
-                }
+                };
             });
             if (handshake_delayed)
             {
@@ -910,26 +974,12 @@ BPMux.prototype._process_header = function (buf)
     var ths = this,
         type = buf.readUInt8(0, true),
         chan = buf.readUInt32BE(1, true),
-        duplex = this.duplexes.get(chan),
-        handshake_data,
-        handshake_delayed = false,
-        dhs,
-        free,
-        seq;
-
-    function delay_handshake()
-    {
-        handshake_delayed = true;
-        return function (handshake_data)
-        {
-            duplex._send_handshake(handshake_data);
-        };
-    }
+        duplex = this.duplexes.get(chan);
 
     function handle_status()
     {
-        free = buf.readUInt32BE(5, true);
-        seq = buf.length === 13 ? buf.readUInt32BE(9, true) : 0;
+        let free = buf.readUInt32BE(5, true);
+        const seq = buf.length === 13 ? buf.readUInt32BE(9, true) : 0;
 
         free = duplex._max_write_size > 0 ?
             Math.min(free, duplex._max_write_size) : free;
@@ -1009,10 +1059,11 @@ BPMux.prototype._process_header = function (buf)
             break;
 
         case TYPE_HANDSHAKE:
+        {
             if (!this._check_buffer(buf, 9)) { return; }
             if (duplex._seq === 0)
             {
-                free = buf.readUInt32BE(5, true);
+                const free = buf.readUInt32BE(5, true);
                 duplex._remote_free = duplex._max_write_size > 0 ?
                     Math.min(free, duplex._max_write_size) : free;
                 duplex._set_remote_free = true;
@@ -1034,7 +1085,16 @@ BPMux.prototype._process_header = function (buf)
                     this.emit('error', ex);
                 }
             }
-            dhs = duplex._handshake_sent ? null : delay_handshake;
+            let handshake_delayed = false;
+            const delay_handshake = () =>
+            {
+                handshake_delayed = true;
+                return function (handshake_data)
+                {
+                    duplex._send_handshake(handshake_data);
+                };
+            };
+            const dhs = duplex._handshake_sent ? null : delay_handshake;
             this.emit('handshake', duplex, handshake_data, dhs);
             duplex.emit('handshake', handshake_data, dhs);
             if (handshake_delayed)
@@ -1060,6 +1120,7 @@ BPMux.prototype._process_header = function (buf)
             }
             this._send();
             break;
+        }
 
         case TYPE_FINISHED_STATUS:
             // from old duplex
@@ -1394,7 +1455,8 @@ BPMux.prototype.multiplex = function (options)
                 ths.emit('handshake_sent', duplex, true);
                 duplex.emit('handshake_sent', true);
             });
-            duplex.on('response', headers => {
+            duplex.on('response', headers =>
+            {
                 const status = headers[http2.constants.HTTP2_HEADER_STATUS];
                 if (status !== 200)
                 {
