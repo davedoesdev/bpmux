@@ -98,7 +98,8 @@ function test(type,
                 'write EPIPE',
                 'read ECONNRESET',
                 'write ECONNRESET',
-                'Cannot call write after a stream was destroyed'
+                'Cannot call write after a stream was destroyed',
+                'network error'
             ]);
             if (err.message === 'carrier stream ended before end message received')
             {
@@ -230,7 +231,9 @@ function test(type,
                 'read ECONNRESET',
                 'write ECONNRESET',
                 'write EPIPE',
-                'Cannot call write after a stream was destroyed'
+                'Cannot call write after a stream was destroyed',
+                'Failed to fetch',
+                'network error'
             ]);
         }
 

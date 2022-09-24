@@ -63,7 +63,7 @@ module.exports = function (grunt)
             cover_report: `${c8} report -r lcov`,
             cover_check: `${c8} check-coverage --statements 100 --branches 100 --functions 100 --lines 100`,
             nw_build: [
-                'rsync -aL node_modules test/fixtures/nw --exclude nw-builder --exclude nwbuild',
+                'rsync -aL node_modules test/fixtures/nw --exclude nw-builder --exclude nwbuild --delete',
                 'NODE_ENV=test npx babel --config-file ./test/fixtures/nw/.babelrc.json test/fixtures/nw/node_modules/http2-duplex/server.js --out-file test/fixtures/nw/node_modules/http2_duplex_server.js --source-maps',
                 'cp index.js test/fixtures/nw/node_modules/bpmux.js',
                 'cp test/test_browser.js test/fixtures/nw/node_modules',
@@ -73,7 +73,7 @@ module.exports = function (grunt)
                 'touch test/fixtures/nw/node_modules/fixtures/keep',
                 'mkdir -p test/fixtures/nw/node_modules/certs',
                 'cp test/certs/server.* test/fixtures/nw/node_modules/certs',
-                'npx nwbuild --quiet -p linux64 test/fixtures/nw'
+                'npx nwbuild test/fixtures/nw/package.json "test/fixtures/nw/**" --mode build --quiet warn --playforms linux64'
             ].join('&&'),
             bpmux_test: 'export TEST_ERR_FILE=/tmp/test_err_$$; ./build/bpmux-test/linux64/bpmux-test; if [ -f $TEST_ERR_FILE ]; then exit 1; fi',
             bundle: 'npx webpack --mode production --config test/webpack.config.js',
