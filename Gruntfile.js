@@ -3,6 +3,10 @@
 
 var path = require('path');
 
+// Stop process.exit() being called, which hangs process
+// due to webtransport native code not being cleaned up
+require('grunt-legacy-util').exit = () => {};
+
 // Enable passing options in title (WithOptions in test/test_comms.js)
 require('mocha/lib/utils').isString = function (obj)
 {
@@ -20,7 +24,8 @@ module.exports = function (grunt)
             target: [
                 '*.js',
                 'test/*.js',
-                'test/comparison/*.js'
+                'test/comparison/*.js',
+                'test/comparison/*.mjs'
             ]
         },
 
@@ -40,11 +45,12 @@ module.exports = function (grunt)
         mochaTest: {
             default: {
                 src: [
-                    'test/test_tcp.js',
+                    /*'test/test_tcp.js',
                     'test/test_channel_full.js',
                     'test/test_inline_stream.js',
                     'test/test_http2.js',
-                    'test/test_http2_session.js'
+                    'test/test_http2_session.js',*/
+                    'test/test_webtransport.js'
                 ],
                 options: {
                     timeout: 10 * 60 * 1000,
@@ -78,7 +84,7 @@ module.exports = function (grunt)
             bpmux_test: 'export TEST_ERR_FILE=/tmp/test_err_$$; ./build/bpmux-test/linux64/bpmux-test; if [ -f $TEST_ERR_FILE ]; then exit 1; fi',
             bundle: 'npx webpack --mode production --config test/webpack.config.js',
             bundle_example: 'npx webpack --mode production --config test/webpack.example.config.js',
-            certs: 'if [ ! -f test/certs/server.crt ]; then ./test/certs/make_ca_cert.sh && ./test/certs/make_server_cert.sh; fi'
+            certs: './test/certs/make_ca_cert.sh && ./test/certs/make_server_cert.sh'
         }).map(([k, cmd]) => [k, { cmd, stdio: 'inherit' }]))
     });
     

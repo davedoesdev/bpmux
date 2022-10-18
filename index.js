@@ -471,6 +471,34 @@ class Http2Sessions
     }
 }
 
+function create_nreader(reader)
+{
+    return {
+        overflow: new Uint8Array(),
+
+        async read(n)
+        {
+            let arrays = [];
+            let data = this.overflow;
+            let done = false;
+            do
+            {
+                const size = Math.min(data.length, n);
+                arrays.push(data.subarray(0, size));
+                n -= size;
+                if (n === 0)
+                {
+                    this.overflow = data.subarray(size);
+                    return { done: false, value: Buffer.concat(arrays) };
+                }
+                ({ done, value: data } = await reader.read());
+            }
+            while (!done);
+            return { done };
+        }
+    };
+}
+
 function BPDuplex(options, mux, chan)
 {
     Duplex.call(this, options);
@@ -609,7 +637,7 @@ Constructor for a `BPMux` object which multiplexes more than one [`stream.Duplex
 
 - `{Integer} [max_open]` Maximum number of multiplexed streams that can be open at a time. Defaults to 0 (no maximum).
 
-- `{Integer} [max_header_size]` `BPMux` adds a control header to each message it sends, which the receiver reads into memory. The header is of variable length &mdash; for example, handshake messages contain handshake data which can be supplied by the application. `max_header_size` is the maximum number of header bytes to read into memory. If a larger header is received, `BPMux` emits an `error` event. Defaults to 0 (no limit).
+- `{Integer} [max_header_size]` `BPMux` adds a control header to each message it sends, which the receiver reads into memory. The header is of variable length &mdash; for example, handshake messages contain handshake data which can be supplied by the application. `max_header_size` is the maximum number of header bytes to read into memory. If a larger header is received, `BPMux` emits an `error` event. Defaults to 512KiB. Set to 0 for no limit.
 
 - `{Integer|false}` `keep_alive` Send a single byte keep-alive message every N milliseconds. Defaults to 30000 (30 seconds). Pass `false` to disable.
 */
@@ -624,8 +652,10 @@ function BPMux(carrier, options)
         keep_alive: 30 * 1000
     }, options);
 
+    this._peer_multiplex_options = options.peer_multiplex_options;
     this._max_duplexes = Math.pow(2, 31);
     this._max_open = options.max_open;
+    this._max_header_size = options.max_header_size === undefined ? (512 * 1024) : options.max_header_size;
     this.duplexes = new Map();
     this._chan = 0;
     this._chan_offset = options.high_channels ? this._max_duplexes : 0;
@@ -744,13 +774,250 @@ function BPMux(carrier, options)
         return;
     }
 
-    this._max_header_size = options.max_header_size;
+    if (carrier.incomingBidirectionalStreams)
+    {
+        const bidi_reader = carrier.incomingBidirectionalStreams.getReader();
+
+        (async () =>
+        {
+            try
+            {
+                await carrier.closed;
+            }
+            catch (ex)
+            {
+                this.emit('error', ex);
+            }
+
+            carrier.is_closed = true;
+
+            for (let duplex of this.duplexes.values())
+            {
+                if (!duplex.closed)
+                {
+                    const err = new Error('carrier stream closed before duplex closed');
+                    err.carrier_done = true;
+                    duplex.destroy(err);
+                }
+            }
+
+            this.emit('finish');
+            this.emit('end');
+            this.emit('close');
+        })();
+
+        (async () =>
+        {
+            while (true) // eslint-disable-line no-constant-condition
+            {
+                let value, writable, readable, done;
+
+                try
+                {
+                    ({ done, value } = await bidi_reader.read());
+                    if (done)
+                    {
+                        return;
+                    }
+                    ({ writable, readable } = value);
+                }
+                catch (ex)
+                {
+                    return this.emit('error', ex);
+                }
+
+                let stream_reader, duplex;
+
+                const close = async err =>
+                {
+                    if (!err.message)
+                    {
+                        err = new Error(err);
+                    }
+                    if (duplex)
+                    {
+                        try
+                        {
+                            duplex.destroy(err);
+                        }
+                        catch (ex)
+                        {
+                            this.emit('warning', ex);
+                        }
+                    }
+                    else
+                    {
+                        try
+                        {
+                            await writable.abort(err.message);
+                        }
+                        catch (ex)
+                        {
+                            this.emit('warning', ex);
+                        }
+                        try
+                        {
+                            if (stream_reader)
+                            {
+                                await stream_reader.abort(err.message);
+                            }
+                            else
+                            {
+                                await readable.abort(err.message);
+                            }
+                        }
+                        catch (ex)
+                        {
+                            this.emit('warning', ex);
+                        }
+                    }
+                    this.emit('warning', err);
+                };
+
+                try
+                {
+                    stream_reader = readable.getReader();
+                    if ((this._max_open > 0) && (this.duplexes.size === this._max_open))
+                    {
+                        this.emit('full');
+                        await close('full');
+                        continue;
+                    }
+
+                    const nreader = create_nreader(stream_reader);
+
+                    ({ done, value } = await nreader.read(4));
+                    if (done)
+                    {
+                        await close('failed to read channel number');
+                        continue;
+                    }
+                    const channel = value.readUint32BE();
+                    if (this.duplexes.has(channel))
+                    {
+                        await close('already exists');
+                        continue;
+                    }
+
+                    ({ done, value } = await nreader.read(4));
+                    if (done)
+                    {
+                        await close('failed to read handshake length');
+                        continue;
+                    }
+                    const len = value.readUint32BE();
+                    if ((this._max_header_size > 0) && (len > this._max_header_size))
+                    {
+                        await close('handshake too big');
+                        continue;
+                    }
+
+                    if (len > 0)
+                    {
+                        ({ done, value } = await nreader.read(len));
+                        if (done)
+                        {
+                            await close('failed to read handshake');
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        value = Buffer.alloc(0);
+                    }
+
+                    stream_reader.releaseLock();
+                    stream_reader = null;
+
+                    duplex = Duplex.fromWeb({ writable, readable }, this._peer_multiplex_options);
+                    duplex.cork();
+                    duplex.push(Buffer.from(nreader.overflow));
+
+                    this._add_wt_duplex(duplex, channel);
+                    this.emit('peer_multiplex', duplex);
+
+                    let handshake_delayed = false;
+                    this._parse_wt_handshake(duplex, value, () =>
+                    {
+                        handshake_delayed = true;
+                        let delayed_handshake;
+                        const uncork = duplex.uncork;
+                        duplex.uncork = () =>
+                        {
+                            duplex.uncork = uncork;
+                            if (!duplex.destroyed) // Node 12 calls uncork on end even if destroyed
+                            {
+                                if (!delayed_handshake)
+                                {
+                                    delayed_handshake = Buffer.alloc(0);
+                                }
+                                const state = duplex._writableState;
+                                if (delayed_handshake.length > 0)
+                                {
+                                    state.buffered.unshift({
+                                        chunk: delayed_handshake,
+                                        encoding: null,
+                                        callback: () => {}
+                                    });
+                                    state.length += delayed_handshake.length;
+                                }
+                                const lenbuf = Buffer.alloc(4);
+                                lenbuf.writeUint32BE(delayed_handshake.length);
+                                state.buffered.unshift({
+                                    chunk: lenbuf,
+                                    encoding: null,
+                                    callback: () => {}
+                                });
+                                state.length += lenbuf.length;
+                                duplex._handshake_sent = true;
+                                this.emit('handshake_sent', duplex, true);
+                                duplex.emit('handshake_sent', true);
+                                duplex.uncork();
+                            }
+                        };
+                        return handshake =>
+                        {
+                            delayed_handshake = handshake;
+                            duplex.uncork();
+                        };
+                    });
+
+                    if (handshake_delayed)
+                    {
+                        this.emit('pre_handshake_sent', duplex, true);
+                        duplex.emit('pre_handshake_sent', true);
+                    }
+                    else
+                    {
+                        const state = duplex._writableState;
+                        const lenbuf = Buffer.alloc(4);
+                        state.buffered.unshift({
+                            chunk: lenbuf,
+                            encoding: null,
+                            callback: () => {}
+                        });
+                        state.length += lenbuf.length;
+                        duplex._handshake_sent = true;
+                        this.emit('handshake_sent', duplex, true);
+                        duplex.emit('handshake_sent', true);
+                        duplex.uncork();
+                    }
+                }
+                catch (ex)
+                {
+                    await close(ex);
+                }
+            }
+        })();
+
+        return;
+    }
+
     this._finished = false;
     this._ended = false;
     this._header_buffers = [];
     this._header_buffer_len = 0;
     this._reading_duplex = null;
-    this._peer_multiplex_options = options.peer_multiplex_options;
     this._coalesce_writes = options.coalesce_writes;
     this._sending = false;
     this._send_requested = false;
@@ -1407,6 +1674,13 @@ BPMux.prototype.multiplex = function (options)
             throw new Error('closed');
         }
     }
+    else if (this.carrier.createBidirectionalStream)
+    {
+        if (this.carrier.is_closed)
+        {
+            throw new Error('closed');
+        }
+    }
     else
     {
         if (this.carrier.destroyed)
@@ -1470,6 +1744,139 @@ BPMux.prototype.multiplex = function (options)
                 ths._parse_http2_handshake(duplex, headers, null);
             });
             return duplex;
+        }
+
+        if (ths.carrier.createBidirectionalStream)
+        {
+            return new Promise(async (resolve, reject) => // eslint-disable-line no-async-promise-executor
+            {
+                let { writable, readable } = await ths.carrier.createBidirectionalStream();
+                let writer, reader, duplex;
+
+                async function close(err)
+                {
+                    if (!err.message)
+                    {
+                        err = new Error(err);
+                    }
+                    if (duplex)
+                    {
+                        try
+                        {
+                            duplex.destroy(err);
+                        }
+                        catch (ex)
+                        {
+                            ths.emit('warning', ex);
+                        }
+                    }
+                    else
+                    {
+                        try
+                        {
+                            if (writer)
+                            {
+                                await writer.abort(err.message);
+                            }
+                            else
+                            {
+                                await writable.abort(err.message);
+                            }
+                        }
+                        catch (ex)
+                        {
+                            ths.emit('warning', ex);
+                        }
+                        try
+                        {
+                            if (reader)
+                            {
+                                await reader.abort(err.message);
+                            }
+                            else
+                            {
+                                await readable.abort(err.message);
+                            }
+                        }
+                        catch (ex)
+                        {
+                            ths.emit('warning', ex);
+                        }
+                    }
+                    reject(err);
+                }
+
+                try
+                {
+                    writer = writable.getWriter();
+
+                    const chan = new Uint8Array(4);
+                    new DataView(chan.buffer).setUint32(0, channel);
+                    await writer.write(chan);
+
+                    const handshake = options.handshake_data || Buffer.alloc(0);
+                    const lenbuf = new Uint8Array(4);
+                    new DataView(lenbuf.buffer).setUint32(0, handshake.length);
+                    await writer.write(lenbuf);
+
+                    if (handshake.length > 0)
+                    {
+                        await writer.write(new Uint8Array(
+                            handshake.buffer, handshake.byteOffset, handshake.length));
+                    }
+
+                    writer.releaseLock();
+                    writer = null;
+
+                    reader = readable.getReader();
+                    const nreader = create_nreader(reader);
+
+                    let { done, value } = await nreader.read(4);
+                    if (done)
+                    {
+                        return await close('failed to read handshake length');
+                    }
+                    const len = value.readUint32BE();
+                    if ((ths._max_header_size > 0) && (len > ths._max_header_size))
+                    {
+                        return await close('handshake too big');
+                    }
+
+                    if (len > 0)
+                    {
+                        ({ done, value } = await nreader.read(len));
+                        if (done)
+                        {
+                            return await close('failed to read handshake');
+                        }
+                    }
+                    else
+                    {
+                        value = Buffer.alloc(0);
+                    }
+
+                    reader.releaseLock();
+                    reader = null;
+
+                    duplex = Duplex.fromWeb({ writable, readable }, options);
+                    duplex.push(Buffer.from(nreader.overflow));
+                    ths._add_wt_duplex(duplex, channel);
+
+                    setImmediate(() =>
+                    {
+                        duplex._handshake_sent = true;
+                        ths.emit('handshake_sent', duplex, true);
+                        duplex.emit('handshake_sent', true);
+                        ths._parse_wt_handshake(duplex, value, null);
+                    });
+
+                    resolve(duplex);
+                }
+                catch (ex)
+                {
+                    await close(ex);
+                }
+            });
         }
 
         var duplex = new BPDuplex(options, ths, channel);
@@ -1576,6 +1983,70 @@ BPMux.prototype._parse_http2_handshake = function (duplex, headers, delay_handsh
             duplex.emit('error', ex);
         }
         this.emit('error', ex);
+    }
+    this.emit('handshake', duplex, handshake_data, delay_handshake);
+    duplex.emit('handshake', handshake_data, delay_handshake);
+};
+
+BPMux.prototype._add_wt_duplex = function (duplex, channel)
+{
+    duplex._mux = this;
+    duplex.mux = this;
+    duplex._chan = channel;
+    duplex.get_channel = () => channel;
+    duplex._handshake_sent = false;
+    duplex._handshake_received = false;
+    this.duplexes.set(channel, duplex);
+    if ((this._max_open > 0) && (this.duplexes.size === this._max_open))
+    {
+        this.emit('full');
+    }
+    duplex.on('close', () =>
+    {
+        this.duplexes.delete(channel);
+        this.emit('removed', duplex);
+    });
+    duplex.peer_error_then_end = function (chunk, encoding, cb)
+    {
+        return this.write(chunk, encoding, err =>
+        {
+            if (err)
+            {
+                return cb(err);
+            }
+            const emit = this.emit;
+            const msg = 'peer_error_then_end';
+            this.emit = (name, ...args) =>
+            {
+                if ((name === 'error') &&
+                    (args.length > 0) && args[0] && (args[0].message === msg))
+                {
+                    return cb();
+                }
+                emit.apply(name, args);
+            };
+            this.destroy(new Error(msg));
+        });
+    };
+};
+
+BPMux.prototype._parse_wt_handshake = function (duplex, handshake_data, delay_handshake)
+{
+    duplex._handshake_received = true;
+    if (this._parse_handshake_data)
+    {
+        try
+        {
+            handshake_data = this._parse_handshake_data(handshake_data);
+        }
+        catch (ex)
+        {
+            if (duplex.listenerCount('error') > 0)
+            {
+                duplex.emit('error', ex);
+            }
+            this.emit('error', ex);
+        }
     }
     this.emit('handshake', duplex, handshake_data, delay_handshake);
     duplex.emit('handshake', handshake_data, delay_handshake);

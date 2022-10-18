@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const net = require('net');
-const { BPMux } = require('bpmux');
+const { BPMux } = require('../..');
 
 require('net').createServer(c => {
     new BPMux(c).on('handshake', stream => {

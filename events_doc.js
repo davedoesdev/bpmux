@@ -65,6 +65,13 @@ write any more data).
 BPMux.events.finish = function () { return undefined; };
 
 /**
+`close` event
+
+A `BPMux` object emits a `close` event after the carrier stream has ended and finished.
+*/
+BPMux.events.close = function () { return undefined; };
+
+/**
 `full` event
 
 A `BPMux` object emits a `full` event when it wants to add a new multiplexed stream on the carrier stream but the number of multiplexed streams is at its maximum. It will remain at maximum until a [`removed`](#bpmuxeventsremovedduplex) event is emitted.

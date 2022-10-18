@@ -10,5 +10,5 @@ do
   esac
 done
 
-openssl req -new -x509 -nodes -newkey rsa:2048 -keyout ca.key -out ca.crt -days 3650 -subj "/CN=$cn/"
+openssl req -new -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) -keyout ca.key -out ca.crt -days 3650 -subj "/CN=$cn/"
 

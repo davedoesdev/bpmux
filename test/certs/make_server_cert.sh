@@ -10,4 +10,4 @@ do
   esac
 done
 
-openssl req -new -nodes -newkey rsa:2048 -keyout server.key -subj "/CN=$host/" | openssl x509 -req -extfile extensions -days 1095 -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt
+openssl req -new -nodes -newkey ec:<(openssl ecparam -name prime256v1) -keyout server.key -subj "/CN=$host/" | openssl x509 -req -extfile extensions -days 14 -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt
