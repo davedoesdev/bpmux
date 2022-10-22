@@ -8,7 +8,7 @@ jobs:
 
         strategy:
             matrix:
-              node-version: [14, 16, 18]
+              node-version: [16, 18]
               target: [test-inline, test-browser, coverage]
 
         steps:
