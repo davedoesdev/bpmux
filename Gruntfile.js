@@ -45,11 +45,11 @@ module.exports = function (grunt)
         mochaTest: {
             default: {
                 src: [
-                    /*'test/test_tcp.js',
+                    'test/test_tcp.js',
                     'test/test_channel_full.js',
                     'test/test_inline_stream.js',
                     'test/test_http2.js',
-                    'test/test_http2_session.js',*/
+                    'test/test_http2_session.js',
                     'test/test_webtransport.js'
                 ],
                 options: {

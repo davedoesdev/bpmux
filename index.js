@@ -842,7 +842,7 @@ function BPMux(carrier, options)
                         }
                         catch (ex)
                         {
-                            this.emit('warning', ex);
+                            this.emit('error', ex);
                         }
                     }
                     else
@@ -853,13 +853,13 @@ function BPMux(carrier, options)
                         }
                         catch (ex)
                         {
-                            this.emit('warning', ex);
+                            this.emit('error', ex);
                         }
                         try
                         {
                             if (stream_reader)
                             {
-                                await stream_reader.abort(err.message);
+                                await stream_reader.cancel(err.message);
                             }
                             else
                             {
@@ -868,10 +868,10 @@ function BPMux(carrier, options)
                         }
                         catch (ex)
                         {
-                            this.emit('warning', ex);
+                            this.emit('error', ex);
                         }
                     }
-                    this.emit('warning', err);
+                    this.emit('error', err);
                 };
 
                 try
@@ -893,11 +893,6 @@ function BPMux(carrier, options)
                         continue;
                     }
                     const channel = value.readUint32BE();
-                    if (this.duplexes.has(channel))
-                    {
-                        await close('already exists');
-                        continue;
-                    }
 
                     ({ done, value } = await nreader.read(4));
                     if (done)
@@ -926,8 +921,28 @@ function BPMux(carrier, options)
                         value = Buffer.alloc(0);
                     }
 
+                    if (this.duplexes.has(channel))
+                    {
+                        await close('already exists');
+                        continue;
+                    }
+
                     stream_reader.releaseLock();
                     stream_reader = null;
+
+                    // Work around https://github.com/nodejs/node/issues/42694
+                    // until https://github.com/nodejs/node/pull/45026 is merged
+                    const orig_getReader = readable.getReader;
+                    readable.getReader = function ()
+                    {
+                        const reader = orig_getReader.apply(this, arguments);
+                        Object.defineProperty(reader, 'closed',
+                        {
+                            value: new Promise(() => {}),
+                            writable: false
+                        });
+                        return reader;
+                    };
 
                     duplex = Duplex.fromWeb({ writable, readable }, this._peer_multiplex_options);
                     duplex.cork();
@@ -1767,7 +1782,7 @@ BPMux.prototype.multiplex = function (options)
                         }
                         catch (ex)
                         {
-                            ths.emit('warning', ex);
+                            ths.emit('error', ex);
                         }
                     }
                     else
@@ -1785,13 +1800,13 @@ BPMux.prototype.multiplex = function (options)
                         }
                         catch (ex)
                         {
-                            ths.emit('warning', ex);
+                            ths.emit('error', ex);
                         }
                         try
                         {
                             if (reader)
                             {
-                                await reader.abort(err.message);
+                                await reader.cancel(err.message);
                             }
                             else
                             {
@@ -1800,7 +1815,7 @@ BPMux.prototype.multiplex = function (options)
                         }
                         catch (ex)
                         {
-                            ths.emit('warning', ex);
+                            ths.emit('error', ex);
                         }
                     }
                     reject(err);
@@ -1855,8 +1870,27 @@ BPMux.prototype.multiplex = function (options)
                         value = Buffer.alloc(0);
                     }
 
+                    if (ths.duplexes.has(channel))
+                    {
+                        return await close('already exists');
+                    }
+
                     reader.releaseLock();
                     reader = null;
+
+                    // Work around https://github.com/nodejs/node/issues/42694
+                    // until https://github.com/nodejs/node/pull/45026 is merged
+                    const orig_getReader = readable.getReader;
+                    readable.getReader = function ()
+                    {
+                        const reader = orig_getReader.apply(this, arguments);
+                        Object.defineProperty(reader, 'closed',
+                        {
+                            value: new Promise(() => {}),
+                            writable: false
+                        });
+                        return reader;
+                    };
 
                     duplex = Duplex.fromWeb({ writable, readable }, options);
                     duplex.push(Buffer.from(nreader.overflow));
@@ -2008,11 +2042,23 @@ BPMux.prototype._add_wt_duplex = function (duplex, channel)
     });
     duplex.peer_error_then_end = function (chunk, encoding, cb)
     {
-        return this.write(chunk, encoding, err =>
+        const cb2 = err =>
+        {
+            if (cb)
+            {
+                cb(err);
+            }
+            if (err)
+            {
+                this.emit('error', err);
+            }
+        };
+
+        return this.write(chunk || '', encoding, err =>
         {
             if (err)
             {
-                return cb(err);
+                return cb2(err);
             }
             const emit = this.emit;
             const msg = 'peer_error_then_end';
@@ -2021,7 +2067,7 @@ BPMux.prototype._add_wt_duplex = function (duplex, channel)
                 if ((name === 'error') &&
                     (args.length > 0) && args[0] && (args[0].message === msg))
                 {
-                    return cb();
+                    return cb2();
                 }
                 emit.apply(name, args);
             };

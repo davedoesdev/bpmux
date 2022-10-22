@@ -100,7 +100,8 @@ function test(type,
                 'write ECONNRESET',
                 'Cannot call write after a stream was destroyed',
                 'network error',
-                'The operation was aborted'
+                'The operation was aborted',
+                'carrier stream closed before duplex closed'
             ]);
             if (err.message === 'carrier stream ended before end message received')
             {
@@ -116,6 +117,10 @@ function test(type,
                 {
                     duplex.end();
                 });
+            }
+            else if (err.message === 'carrier stream closed before duplex closed')
+            {
+                expect(err.carrier_done).to.equal(true);
             }
             else
             {
@@ -2191,9 +2196,9 @@ function test(type,
         }
     }
 
-    //setup(1);
-    //setup(2);
-    //setup(fast ? 5 : 10);
+    setup(1);
+    setup(2);
+    setup(fast ? 5 : 10);
 
     it(new WithOptions('should pass null delay_handshake if handshake already sent',
                        {
@@ -2201,16 +2206,16 @@ function test(type,
                        }),
     function (cb)
     {
-        (async () => {
-            server_mux.on('handshake', function (duplex, handshake_data, delay_handshake)
-            {
-                expect(handshake_data.toString()).to.equal('foo');
-                expect(duplex._handshake_sent).to.equal(false);
-                expect(delay_handshake).not.to.equal(null);
-                csebemr(duplex);
-                delay_handshake()(Buffer.from('bar'));
-            });
+        server_mux.on('handshake', function (duplex, handshake_data, delay_handshake)
+        {
+            expect(handshake_data.toString()).to.equal('foo');
+            expect(duplex._handshake_sent).to.equal(false);
+            expect(delay_handshake).not.to.equal(null);
+            csebemr(duplex);
+            delay_handshake()(Buffer.from('bar'));
+        });
 
+        (async () => {
             var duplex = await client_mux.multiplex(
             {
                 handshake_data: ClientBuffer.from('foo')
@@ -2247,22 +2252,6 @@ function test(type,
         client_mux.once('error', check);
         server_mux.once('error', check);
 
-        var duplex = client_mux.multiplex(
-        {
-            handshake_data: ClientBuffer.from('foo')
-        });
-        duplex.once('error', function (err)
-        {
-            check(err);
-            csebemr(this);
-        });
-        duplex.on('handshake', function (handshake_data)
-        {
-            expect(handshake_data.toString()).to.equal('bar');
-            expect(count).to.equal(4);
-            cb();
-        });
-
         server_mux.on('peer_multiplex', function (duplex)
         {
             duplex.once('error', function (err)
@@ -2277,11 +2266,29 @@ function test(type,
             csebemr(duplex);
             delay_handshake()(Buffer.from('bar'));
         });
+
+        (async () => {
+            var duplex = await client_mux.multiplex(
+            {
+                handshake_data: ClientBuffer.from('foo')
+            });
+            duplex.once('error', function (err)
+            {
+                check(err);
+                csebemr(this);
+            });
+            duplex.on('handshake', function (handshake_data)
+            {
+                expect(handshake_data.toString()).to.equal('bar');
+                expect(count).to.equal(4);
+                cb();
+            });
+        })();
     });
 
     it('should be able to specify channel number', function (cb)
     {
-        if (is_passthru)
+        if (type === 'http2-session')
         {
             const onerr = err =>
             {
@@ -2292,6 +2299,17 @@ function test(type,
             };
             client_mux.on('error', onerr);
             server_mux.on('error', onerr);
+        }
+        else if (type === 'webtransport')
+        {
+            const onpm = duplex =>
+            {
+                duplex.on('error', err => {
+                    expect(err.message).to.equal('The operation was aborted');
+                });
+            };
+            client_mux.on('peer_multiplex', onpm);
+            server_mux.on('peer_multiplex', onpm);
         }
 
         var c100 = false, s100 = false, c200 = false, s200 = false;
@@ -2304,134 +2322,209 @@ function test(type,
             }
         }
 
-        function client100()
+        async function client100()
         {
-            var client_duplex100 = client_mux.multiplex(
-            {
-                channel: 100
-            });
-            add_duplex(client_duplex100);
-            expect(client_duplex100.get_channel()).to.equal(100);
-            client_duplex100.write('a');
-            client_duplex100.on('readable', function ()
-            {
-                var data = this.read();
-                if (data !== null)
+            try {
+                var client_duplex100 = await client_mux.multiplex(
                 {
-                    expect(c100).to.equal(false);
-                    c100 = true;
-                    expect(data.toString()).to.equal('b');
-                    check();
-                }
-            });
-            if (is_passthru)
-            {
-                client_duplex100.on('error', function (err)
-                {
-                    expect(err.message).to.equal('peer returned status 409 for channel 100');
-                    expect(err.status).to.equal(409);
-                    expect(err.duplex.get_channel()).to.equal(100);
-                    this.on('close', () => setTimeout(client100, Math.random() * 2000));
+                    channel: 100
                 });
+                add_duplex(client_duplex100);
+                expect(client_duplex100.get_channel()).to.equal(100);
+                client_duplex100.write('a');
+                client_duplex100.on('readable', function ()
+                {
+                    var data = this.read();
+                    if (data !== null)
+                    {
+                        expect(c100).to.equal(false);
+                        c100 = true;
+                        expect(data.toString()).to.equal('b');
+                        check();
+                    }
+                });
+                if (type === 'http2-session')
+                {
+                    client_duplex100.on('error', function (err)
+                    {
+                        expect(err.message).to.equal('peer returned status 409 for channel 100');
+                        expect(err.status).to.equal(409);
+                        expect(err.duplex.get_channel()).to.equal(100);
+                        this.on('close', () => setTimeout(client100, Math.random() * 2000));
+                    });
+                }
+                else if (type === 'webtransport')
+                {
+                    client_duplex100.on('error', function (err)
+                    {
+                        expect(err.message).to.equal('The operation was aborted');
+                    });
+                }
+            }
+            catch (ex)
+            {
+                if (type !== 'webtransport')
+                {
+                    throw ex;
+                }
+                expect(ex.message).to.equal('already exists');
+                setTimeout(client100, Math.random() * 2000);
             }
         }
         client100();
 
-        function server100()
+        async function server100()
         {
-            var server_duplex100 = server_mux.multiplex(
+            try
             {
-                channel: 100
-            });
-            add_duplex(server_duplex100);
-            expect(server_duplex100.get_channel()).to.equal(100);
-            server_duplex100.write('b');
-            server_duplex100.on('readable', function ()
-            {
-                var data = this.read();
-                if (data !== null)
+                var server_duplex100 = await server_mux.multiplex(
                 {
-                    expect(s100).to.equal(false);
-                    s100 = true;
-                    expect(data.toString()).to.equal('a');
-                    check();
-                }
-            });
-            if (is_passthru)
-            {
-                server_duplex100.on('error', function (err)
-                {
-                    expect(err.message).to.equal('peer returned status 409 for channel 100');
-                    expect(err.status).to.equal(409);
-                    expect(err.duplex.get_channel()).to.equal(100);
-                    this.on('close', () => setTimeout(server100, Math.random() * 2000));
+                    channel: 100
                 });
+                add_duplex(server_duplex100);
+                expect(server_duplex100.get_channel()).to.equal(100);
+                server_duplex100.write('b');
+                server_duplex100.on('readable', function ()
+                {
+                    var data = this.read();
+                    if (data !== null)
+                    {
+                        expect(s100).to.equal(false);
+                        s100 = true;
+                        expect(data.toString()).to.equal('a');
+                        check();
+                    }
+                });
+                if (type === 'http2-session')
+                {
+                    server_duplex100.on('error', function (err)
+                    {
+                        expect(err.message).to.equal('peer returned status 409 for channel 100');
+                        expect(err.status).to.equal(409);
+                        expect(err.duplex.get_channel()).to.equal(100);
+                        this.on('close', () => setTimeout(server100, Math.random() * 2000));
+                    });
+                }
+                else if (type === 'webtransport')
+                {
+                    server_duplex100.on('error', function (err)
+                    {
+                        expect(err.message).to.equal('The operation was aborted');
+                    });
+                }
+            }
+            catch (ex)
+            {
+                if (type !== 'webtransport')
+                {
+                    throw ex;
+                }
+                expect(ex.message).to.equal('already exists');
+                setTimeout(server100, Math.random() * 2000);
             }
         }
         server100();
 
-        function client200()
+        async function client200()
         {
-            var client_duplex200 = client_mux.multiplex(
+            try
             {
-                channel: 200
-            });
-            add_duplex(client_duplex200);
-            expect(client_duplex200.get_channel()).to.equal(200);
-            client_duplex200.write('c');
-            client_duplex200.on('readable', function ()
-            {
-                var data = this.read();
-                if (data !== null)
+                var client_duplex200 = await client_mux.multiplex(
                 {
-                    expect(c200).to.equal(false);
-                    c200 = true;
-                    expect(data.toString()).to.equal('d');
-                    check();
-                }
-            });
-            if (is_passthru)
-            {
-                client_duplex200.on('error', function (err)
-                {
-                    expect(err.message).to.equal('peer returned status 409 for channel 200');
-                    expect(err.status).to.equal(409);
-                    expect(err.duplex.get_channel()).to.equal(200);
-                    this.on('close', () => setTimeout(client200, Math.random() * 2000));
+                    channel: 200
                 });
+                add_duplex(client_duplex200);
+                expect(client_duplex200.get_channel()).to.equal(200);
+                client_duplex200.write('c');
+                client_duplex200.on('readable', function ()
+                {
+                    var data = this.read();
+                    if (data !== null)
+                    {
+                        expect(c200).to.equal(false);
+                        c200 = true;
+                        expect(data.toString()).to.equal('d');
+                        check();
+                    }
+                });
+                if (type === 'http2-session')
+                {
+                    client_duplex200.on('error', function (err)
+                    {
+                        expect(err.message).to.equal('peer returned status 409 for channel 200');
+                        expect(err.status).to.equal(409);
+                        expect(err.duplex.get_channel()).to.equal(200);
+                        this.on('close', () => setTimeout(client200, Math.random() * 2000));
+                    });
+                }
+                else if (type === 'webtransport')
+                {
+                    client_duplex200.on('error', function (err)
+                    {
+                        expect(err.message).to.equal('The operation was aborted');
+                    });
+                }
+            }
+            catch (ex)
+            {
+                if (type !== 'webtransport')
+                {
+                    throw ex;
+                }
+                expect(ex.message).to.equal('already exists');
+                setTimeout(client200, Math.random() * 2000);
             }
         }
         client200();
 
-        function server200()
+        async function server200()
         {
-            var server_duplex200 = server_mux.multiplex(
+            try
             {
-                channel: 200
-            });
-            add_duplex(server_duplex200);
-            expect(server_duplex200.get_channel()).to.equal(200);
-            server_duplex200.write('d');
-            server_duplex200.on('readable', function ()
-            {
-                var data = this.read();
-                if (data !== null)
+                var server_duplex200 = await server_mux.multiplex(
                 {
-                    expect(s200).to.equal(false);
-                    s200 = true;
-                    expect(data.toString()).to.equal('c');
-                    check();
-                }
-            });
-            if (is_passthru)
-            {
-                server_duplex200.on('error', function (err)
-                {
-                    expect(err.message).to.equal('peer returned status 409 for channel 200');
-                    expect(err.status).to.equal(409);
-                    expect(err.duplex.get_channel()).to.equal(200);
-                    this.on('close', () => setTimeout(server200, Math.random() * 2000));
+                    channel: 200
                 });
+                add_duplex(server_duplex200);
+                expect(server_duplex200.get_channel()).to.equal(200);
+                server_duplex200.write('d');
+                server_duplex200.on('readable', function ()
+                {
+                    var data = this.read();
+                    if (data !== null)
+                    {
+                        expect(s200).to.equal(false);
+                        s200 = true;
+                        expect(data.toString()).to.equal('c');
+                        check();
+                    }
+                });
+                if (type === 'http2-session')
+                {
+                    server_duplex200.on('error', function (err)
+                    {
+                        expect(err.message).to.equal('peer returned status 409 for channel 200');
+                        expect(err.status).to.equal(409);
+                        expect(err.duplex.get_channel()).to.equal(200);
+                        this.on('close', () => setTimeout(server200, Math.random() * 2000));
+                    });
+                }
+                else if (type === 'webtransport')
+                {
+                    server_duplex200.on('error', function (err)
+                    {
+                        expect(err.message).to.equal('The operation was aborted');
+                    });
+                }
+            }
+            catch (ex)
+            {
+                if (type !== 'webtransport')
+                {
+                    throw ex;
+                }
+                expect(ex.message).to.equal('already exists');
+                setTimeout(server200, Math.random() * 2000);
             }
         }
         server200();
@@ -2439,29 +2532,6 @@ function test(type,
 
     it('should be able to use a control channel to ask for new duplexes', function (cb)
     {
-        var client_duplex = client_mux.multiplex(
-        {
-            handshake_data: make_buffer(client_mux, 'control')
-        });
-        add_duplex(client_duplex);
-        client_duplex.write('aaaaa');
-
-        var count = 0;
-
-        client_mux.on('handshake', function (duplex, handshake_data)
-        {
-            if (handshake_data.toString() !== 'control')
-            {
-                add_duplex(duplex);
-            }
-            count += 1;
-            expect(count).to.be.at.most(6); // 1 for return handshake on control
-            if (count === 6)
-            {
-                return cb();
-            }
-        });
-
         server_mux.once('handshake', function (server_duplex,
                                                handshake_data,
                                                delay_handshake)
@@ -2470,41 +2540,55 @@ function test(type,
             add_duplex(server_duplex);
             delay_handshake()(handshake_data);
 
-            server_duplex.on('readable', function ()
+            server_duplex.on('readable', async function ()
             {
                 var data = this.read(), i;
                 if (data === null) { return; }
 
                 for (i = 0; i < data.length; i += 1)
                 {
-                    add_duplex(server_mux.multiplex());
+                    const d = await server_mux.multiplex();
+                    if (type === 'webtransport')
+                    {
+                        d.on('error', function (err)
+                        {
+                            expect(err.message).to.equal('The operation was aborted');
+                        });
+                    }
+                    add_duplex(d);
                 }
             });
         });
+
+        (async () =>
+        {
+            var client_duplex = await client_mux.multiplex(
+            {
+                handshake_data: make_buffer(client_mux, 'control')
+            });
+            add_duplex(client_duplex);
+            client_duplex.write('aaaaa');
+
+            var count = 0;
+
+            client_mux.on('handshake', function (duplex, handshake_data)
+            {
+                if (handshake_data.toString() !== 'control')
+                {
+                    add_duplex(duplex);
+                }
+                count += 1;
+                expect(count).to.be.at.most(6); // 1 for return handshake on control
+                if (count === 6)
+                {
+                    return cb();
+                }
+            });
+        })();
     });
 
     it('should support write before handshaken', function (cb)
     {
-        var client_duplex = client_mux.multiplex(
-        {
-            _delay_handshake: true
-        });
-        client_duplex.name = 'client';
-        add_duplex(client_duplex);
-        client_duplex.end('x');
-        if (!is_passthru)
-        {
-            client_duplex._send_handshake();
-        }
-
-        client_duplex.on('readable', function ()
-        {
-            var data = this.read();
-            if (data === null) { return; }
-            expect(data.toString()).to.equal('y');
-            cb();
-        });
-
         /*jslint unparam: true */
         server_mux.on('handshake', function (server_duplex,
                                              handshake_data,
@@ -2523,6 +2607,28 @@ function test(type,
             });
         });
         /*jslint unparam: false */
+
+        (async () => {
+            var client_duplex = await client_mux.multiplex(
+            {
+                _delay_handshake: true
+            });
+            client_duplex.name = 'client';
+            add_duplex(client_duplex);
+            client_duplex.end('x');
+            if (!is_passthru)
+            {
+                client_duplex._send_handshake();
+            }
+
+            client_duplex.on('readable', function ()
+            {
+                var data = this.read();
+                if (data === null) { return; }
+                expect(data.toString()).to.equal('y');
+                cb();
+            });
+        })();
     });
 
     it(new WithOptions('should emit a full event when maximum number of open duplexes exceeded',
@@ -2531,7 +2637,7 @@ function test(type,
                        }),
     function (cb)
     {
-        if (is_passthru)
+        if (type === 'http2-session')
         {
             client_mux.on('error', function (err)
             {
@@ -2546,6 +2652,10 @@ function test(type,
             if (count === 3)
             {
                 third_server = duplex;
+                if (type === 'webtransport')
+                {
+                    duplex.resume();
+                }
             }
         });
         // once when reaches 3
@@ -2581,7 +2691,7 @@ function test(type,
         });
         function handle_err(duplex)
         {
-            if (is_passthru)
+            if (type === 'http2-session')
             {
                 duplex.on('error', function (err)
                 {
@@ -2594,12 +2704,15 @@ function test(type,
             }
         }
 
-        client_mux._max_open = 0;
-        handle_err(client_mux.multiplex());
-        handle_err(client_mux.multiplex());
-        third_client = client_mux.multiplex();
-        handle_err(third_client);
-        handle_err(client_mux.multiplex());
+        (async () =>
+        {
+            client_mux._max_open = 0;
+            handle_err(await client_mux.multiplex());
+            handle_err(await client_mux.multiplex());
+            third_client = await client_mux.multiplex();
+            handle_err(third_client);
+            handle_err(await client_mux.multiplex());
+        })();
     });
 
     it(new WithOptions('should be able to limit header size',
@@ -2609,46 +2722,48 @@ function test(type,
     function (cb)
     {
         server_mux.on('peer_multiplex', csebemr);
-        var duplex = client_mux.multiplex();
-        csebemr(duplex);
-        duplex.on('handshake', function ()
+
+        (async () =>
         {
-            server_mux.on('handshake', function ()
+            var duplex = await client_mux.multiplex();
+            csebemr(duplex);
+            duplex.on('handshake', async function ()
             {
-                cb(new Error('should not be called'));
-            });
-
-            server_mux.once('error', function (err)
-            {
-                expect(err.message).to.equal('header too big');
-                cb();
-            });
-
-            const duplex2 = client_mux.multiplex(
-            {
-                handshake_data: Buffer.alloc(128 * 1024)
-            });
-
-            if (is_passthru)
-            {
-                duplex2.on('error', function (err)
+                server_mux.on('handshake', function ()
                 {
-                    expect(err.message).to.equal('Stream closed with error code NGHTTP2_REFUSED_STREAM');
+                    cb(new Error('should not be called'));
+                });
+
+                server_mux.once('error', function (err)
+                {
+                    expect(err.message).to.equal(
+                        (type === 'webtransport' ? 'handshake' : 'header') + ' too big');
                     cb();
                 });
-            }
-            else
-            {
-                csebemr(duplex2);
-            }
-        });
+
+                const duplex2 = await client_mux.multiplex(
+                {
+                    handshake_data: Buffer.alloc(128 * 1024)
+                });
+
+                if (type === 'http2-session')
+                {
+                    duplex2.on('error', function (err)
+                    {
+                        expect(err.message).to.equal('Stream closed with error code NGHTTP2_REFUSED_STREAM');
+                        cb();
+                    });
+                }
+                else
+                {
+                    csebemr(duplex2);
+                }
+            });
+        })();
     });
 
     it('should be able to emit error on and end peer duplex', function (cb)
     {
-        var duplex = client_mux.multiplex();
-        csebemr(duplex);
-
         server_mux.on('handshake', function (duplex)
         {
             var error, bufs = [];
@@ -2668,25 +2783,26 @@ function test(type,
                 }
             });
 
-            duplex.on('end', function ()
+            duplex.on(type === 'webtransport' ? 'close' : 'end', function ()
             {
                 expect(Buffer.concat(bufs).toString()).to.equal('hello');
-                expect(error.message).to.equal('peer error');
+                expect(error.message).to.equal(
+                    type === 'webtransport' ? 'The operation was aborted' : 'peer error');
                 cb();
             });
         });
 
-        duplex.peer_error_then_end('hello');
+        (async () =>
+        {
+            var duplex = await client_mux.multiplex();
+            csebemr(duplex);
+
+            duplex.peer_error_then_end('hello');
+        })();
     });
 
     it('should be able to emit error on and end peer duplex (before handshake)', function (cb)
     {
-        var duplex = client_mux.multiplex(
-        {
-            _delay_handshake: true
-        });
-        csebemr(duplex);
-
         server_mux.on('handshake', function (duplex)
         {
             var error, bufs = [];
@@ -2706,22 +2822,32 @@ function test(type,
                 }
             });
 
-            duplex.on('end', function ()
+            duplex.on(type === 'webtransport' ? 'close' : 'end', function ()
             {
                 expect(Buffer.concat(bufs).toString()).to.equal('');
-                expect(error.message).to.equal('peer error');
+                expect(error.message).to.equal(
+                    type === 'webtransport' ? 'The operation was aborted' : 'peer error');
                 cb();
             });
         });
 
-        duplex.peer_error_then_end();
-        if (!is_passthru)
+        (async () =>
         {
-            setTimeout(function ()
+            var duplex = await client_mux.multiplex(
             {
-                duplex._send_handshake();
-            }, 500);
-        }
+                _delay_handshake: true
+            });
+            csebemr(duplex);
+
+            duplex.peer_error_then_end();
+            if (!is_passthru)
+            {
+                setTimeout(function ()
+                {
+                    duplex._send_handshake();
+                }, 500);
+            }
+        })();
     });
 
     if (!is_passthru)
@@ -2829,13 +2955,18 @@ function test(type,
 
     it('should not remove duplex after close until end message received', function (cb)
     {
-        var client_duplex = client_mux.multiplex();
+        let client_duplex;
 
-        server_mux.on('handshake', function (server_duplex)
+        server_mux.on('handshake', function handshake(server_duplex)
         {
+            if (!client_duplex)
+            {
+                return setImmediate(handshake, server_duplex);
+            }
+
             var client_ended = false, server_ended = false;
 
-            server_duplex.on('readable', function ()
+            server_duplex.on('readable', function readable ()
             {
                 if (!client_ended)
                 {
@@ -2858,6 +2989,14 @@ function test(type,
                 this.end();
             });
 
+            if (type === 'webtransport')
+            {
+                server_duplex.on('error', function (err)
+                {
+                    expect(err.message).to.equal('The operation was aborted');
+                });
+            }
+
             client_mux.on('removed', function (duplex)
             {
                 expect(duplex).to.equal(client_duplex);
@@ -2867,20 +3006,24 @@ function test(type,
 
             client_duplex.write('foo');
         });
+
+        (async () =>
+        {
+            client_duplex = await client_mux.multiplex();
+        })();
     });
 
     it('should remove duplex after end message received then closed', function (cb)
     {
-        var client_duplex = client_mux.multiplex();
+        let client_duplex;
 
-        client_mux.on('removed', function (duplex)
+        server_mux.on('handshake', function handshake(server_duplex)
         {
-            expect(duplex).to.equal(client_duplex);
-            cb();
-        });
+            if (!client_duplex)
+            {
+                return setImmediate(handshake, server_duplex);
+            }
 
-        server_mux.on('handshake', function (server_duplex)
-        {
             client_duplex.on('readable', function ()
             {
                 while (this.read() !== null);
@@ -2891,8 +3034,27 @@ function test(type,
                 this.destroy();
             });
 
+            if (type === 'webtransport')
+            {
+                server_duplex.on('error', function (err)
+                {
+                    expect(err.message).to.equal('The operation was aborted');
+                });
+            }
+
             server_duplex.end();
         });
+
+        (async () =>
+        {
+            client_duplex = await client_mux.multiplex();
+
+            client_mux.on('removed', function (duplex)
+            {
+                expect(duplex).to.equal(client_duplex);
+                cb();
+            });
+        })();
     });
 
     it('should not send if already sending', function (cb)
@@ -2919,7 +3081,10 @@ function test(type,
             cb();
         });
 
-        csebemr(client_mux.multiplex());
+        (async () =>
+        {
+            csebemr(await client_mux.multiplex());
+        })();
     });
 
     if (!is_passthru)
@@ -2966,41 +3131,13 @@ function test(type,
     {
         let counts = [0, 0];
 
-        server_mux.on('handshake', function (duplex)
-        {
-            duplex.on('error', function (err)
-            {
-                expect(err.message).to.be.oneOf([
-                    'carrier stream ended before end message received',
-                    'carrier stream finished before duplex finished'
-                ]);
-                expect(err.carrier_done).to.equal(true);
-            });
-
-            duplex.on('data', function (d)
-            {
-                counts[duplex._chan] += d.length;
-                expect(counts[0]).to.be.at.most(16 * 1024);
-                if (duplex._chan === 0)
-                {
-                    this.pause();
-                }
-                if (counts[1] === 1024 * 1024)
-                {
-                    cb();
-                }
-            });
-        });
- 
-        const stream1 = client_mux.multiplex();
-        const stream2 = client_mux.multiplex();
-
         function on_err(err)
         {
             expect(err.message).to.be.oneOf([
                 'write after end',
                 'carrier stream finished before duplex finished',
-                'carrier stream ended before end message received'
+                'carrier stream ended before end message received',
+                'The operation was aborted'
             ]);
 
             if ((err.message === 'carrier stream finished before duplex finished') ||
@@ -3014,21 +3151,49 @@ function test(type,
             }
         }
 
-        stream1.on('error', on_err);
-        stream2.on('error', on_err);
-
-        const randomBytes = util.promisify(get_crypto(client_mux).randomBytes);
-
-        async function* random()
+        server_mux.on('handshake', function (duplex)
         {
-            while (true)
-            {
-                yield await randomBytes(64 * 1024);
-            }
-        }
+            duplex.on('error', on_err);
 
-        stream.Readable.from(random()).pipe(stream1);
-        stream.Readable.from(random()).pipe(stream2);
+            let done = false;
+
+            duplex.on('data', function (d)
+            {
+                counts[duplex._chan] += d.length;
+                expect(counts[0]).to.be.at.most(16 * 1024);
+                if (duplex._chan === 0)
+                {
+                    this.pause();
+                }
+                if ((counts[1] >= 1024 * 1024) && !done)
+                {
+                    done = true;
+                    cb();
+                }
+            });
+        });
+ 
+        (async () =>
+        {
+            const stream1 = await client_mux.multiplex();
+            const stream2 = await client_mux.multiplex();
+
+            stream1.on('error', on_err);
+            stream2.on('error', on_err);
+
+            const randomBytes = util.promisify(get_crypto(client_mux).randomBytes);
+
+            async function* random()
+            {
+                while (true)
+                {
+                    yield await randomBytes(64 * 1024);
+                }
+            }
+
+            stream.Readable.from(random()).pipe(stream1);
+            stream.Readable.from(random()).pipe(stream2);
+        })();
     });
 }
 
