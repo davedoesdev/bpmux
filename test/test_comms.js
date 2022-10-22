@@ -906,8 +906,7 @@ function test(type,
         function check()
         {
             if ((n1 === (is_passthru ? 2 : 4)) &&
-                (n2 === (type === 'webtransport' ? 0 :
-                         type === 'http2-session' ? 2 : 3)) &&
+                (n2 === (type === 'webtransport' ? 0 : type === 'http2-session' ? 2 : 3)) &&
                 !called)
             {
                 sender.removeListener('error', onerr1);
@@ -2215,7 +2214,8 @@ function test(type,
             delay_handshake()(Buffer.from('bar'));
         });
 
-        (async () => {
+        (async () =>
+        {
             var duplex = await client_mux.multiplex(
             {
                 handshake_data: ClientBuffer.from('foo')
@@ -2267,7 +2267,8 @@ function test(type,
             delay_handshake()(Buffer.from('bar'));
         });
 
-        (async () => {
+        (async () =>
+        {
             var duplex = await client_mux.multiplex(
             {
                 handshake_data: ClientBuffer.from('foo')
@@ -2304,7 +2305,8 @@ function test(type,
         {
             const onpm = duplex =>
             {
-                duplex.on('error', err => {
+                duplex.on('error', err =>
+                {
                     expect(err.message).to.equal('The operation was aborted');
                 });
             };
@@ -2324,7 +2326,8 @@ function test(type,
 
         async function client100()
         {
-            try {
+            try
+            {
                 var client_duplex100 = await client_mux.multiplex(
                 {
                     channel: 100
@@ -2608,7 +2611,8 @@ function test(type,
         });
         /*jslint unparam: false */
 
-        (async () => {
+        (async () =>
+        {
             var client_duplex = await client_mux.multiplex(
             {
                 _delay_handshake: true
