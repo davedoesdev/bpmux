@@ -5,7 +5,8 @@ var path = require('path');
 
 // Stop process.exit() being called, which hangs process
 // due to webtransport native code not being cleaned up
-require('grunt-legacy-util').exit = code => {
+require('grunt-legacy-util').exit = code =>
+{
     if (code)
     {
         process.exitCode = code;
