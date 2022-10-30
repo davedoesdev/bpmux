@@ -34,6 +34,7 @@ require('mocha/lib/utils').isString = function (obj)
 
 var fs = require('fs'),
     path = require('path'),
+    crypto = require('crypto'),
     http2 = require('http2'),
     Mocha = require('mocha'),
     Primus = require('primus'),
@@ -49,6 +50,7 @@ module.exports = function (BrowserPrimus, // will be using browser transport
                            BrowserBuffer,
                            browser_crypto,
                            browser_frame,
+                           BrowserWebTransport,
                            cb)
 {
     var mocha = new Mocha(
@@ -58,7 +60,7 @@ module.exports = function (BrowserPrimus, // will be using browser transport
     });
 
     mocha.suite.emit('pre-require', global, null, mocha);
-
+/*
     require('test_comms')(
         'primus',
         BPMux,
@@ -181,6 +183,71 @@ module.exports = function (BrowserPrimus, // will be using browser transport
             }
             conn.on('end', cb);
             conn.end();
+        },
+        BrowserBuffer,
+        browser_crypto,
+        browser_frame,
+        true);
+*/
+    require('test_comms')(
+        'webtransport',
+        BPMux,
+        (conn_cb, cb) => {
+            const { Http3Server } = require('@fails-components/webtransport/src/webtransport.cjs');
+            const server = new Http3Server({
+                port: server_port,
+                host: '127.0.0.1',
+                secret: 'testsecret',
+                cert: fs.readFileSync(path.join(__dirname, 'certs', 'server.crt')),
+                privKey: fs.readFileSync(path.join(__dirname, 'certs', 'server.key'))
+            });
+            server.startServer();
+            (async () => {
+                const session_stream = server.sessionStream('/test');
+                const session_reader = session_stream.getReader();
+                while (true) { // eslint-disable-line no-constant-condition
+                    const { done, value } = await session_reader.read();
+                    if (done) {
+                        return;
+                    }
+                    await value.ready;
+                    conn_cb(value);
+                }
+            })();
+            cb(server);
+        },
+        (server, cb) => {
+            server.stopServer();
+            cb();
+        },
+        (wt, cb) => {
+            (async () => {
+                await wt.closed;
+                cb();
+            })();
+        },
+        BrowserBPMux,
+        async (server, cb) => {
+            const client = new BrowserWebTransport(`https://127.0.0.1:${server_port}/test`, {
+                serverCertificateHashes: [{
+                    algorithm: 'sha-256',
+                    value: new Uint8Array(
+                        new crypto.X509Certificate(fs.readFileSync(path.join(__dirname, 'certs', 'server.crt')))
+                            .fingerprint256.split(':').map(el => parseInt(el, 16)))
+                }]
+            });
+            await client.ready;
+            cb(client);
+        },
+        function (client, cb) {
+            (async () => {
+                await client.closed;
+                cb();
+            })();
+            client.close({
+                closeCode: 0,
+                reason: ''
+            });
         },
         BrowserBuffer,
         browser_crypto,

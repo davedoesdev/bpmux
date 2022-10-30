@@ -5,11 +5,11 @@ function done(err)
 {
     if (err)
     {
-        if (process.env.TEST_ERR_FILE)
-        {
-            require('fs').writeFileSync(process.env.TEST_ERR_FILE, '');
-        }
         process.stderr.write(`${err.stack}\n`);
+    }
+    else if (process.env.TEST_ERR_FILE)
+    {
+        require('fs').unlinkSync(process.env.TEST_ERR_FILE);
     }
     require('nw.gui').App.quit();
     if (err)
@@ -51,6 +51,11 @@ console.trace = function trace()
 
 function doit()
 {
+    if (process.env.TEST_ERR_FILE)
+    {
+        require('fs').writeFileSync(process.env.TEST_ERR_FILE, '');
+    }
+
     try
     {
         //nw.Window.get().showDevTools();
@@ -61,6 +66,7 @@ function doit()
                                 BundledBuffer,
                                 bundled_crypto,
                                 bundled_frame,
+                                WebTransport,
                                 done);
     }
     catch (ex)

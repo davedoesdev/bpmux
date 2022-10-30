@@ -101,7 +101,8 @@ function test(type,
                 'Cannot call write after a stream was destroyed',
                 'network error',
                 'The operation was aborted',
-                'carrier stream closed before duplex closed'
+                'carrier stream closed before duplex closed',
+                'The session is closed.'
             ]);
             if (err.message === 'carrier stream ended before end message received')
             {
@@ -434,20 +435,27 @@ function test(type,
 
             (async () =>
             {
-                initiator_duplex = await initiator_mux.multiplex(
-                    title instanceof WithOptions ?
-                        util._extend(
-                        {
-                            handshake_data: initiator_buf
-                        }, title.multiplex_options || {}) :
-                        {
-                            handshake_data: initiator_buf,
-                            highWaterMark: fast ? 2048 : 16384
-                        });
+                try
+                {
+                    initiator_duplex = await initiator_mux.multiplex(
+                        title instanceof WithOptions ?
+                            util._extend(
+                            {
+                                handshake_data: initiator_buf
+                            }, title.multiplex_options || {}) :
+                            {
+                                handshake_data: initiator_buf,
+                                highWaterMark: fast ? 2048 : 16384
+                            });
 
-                expect(initiator_duplex._chan).to.equal(i);
-                add_duplex(initiator_duplex);
-                initiator_duplex.name = initiator_mux.name;
+                    expect(initiator_duplex._chan).to.equal(i);
+                    add_duplex(initiator_duplex);
+                    initiator_duplex.name = initiator_mux.name;
+                }
+                catch (ex)
+                {
+                    return cb(ex);
+                }
                 if ((!wait_for_handshake) || responder_duplex)
                 {
                     f.call(ths, initiator_duplex, wait_for_handshake ? responder_duplex :
@@ -733,7 +741,11 @@ function test(type,
 
         sender.on(is_passthru ? 'close' : 'finish', function ()
         {
-            if (fast && (type !== 'http2-session'))
+            if (fast && (sender.name === 'server') && (typeof window !== 'undefined'))
+            {
+                expect(drains).to.equal(0);
+            }
+            else if (fast && (type !== 'http2-session'))
             {
                 expect(drains).to.equal(726);
             }
@@ -841,7 +853,30 @@ function test(type,
                 var out_stream1 = fs.createWriteStream(out_fname1),
                     out_stream2 = fs.createWriteStream(out_fname2),
                     finished1 = false,
-                    finished2 = false;
+                    finished2 = false,
+                    done = false,
+                    sender_closed = false,
+                    receiver_closed = false;
+
+                function check()
+                {
+                    if (done && sender_closed && receiver_closed)
+                    {
+                        cb();
+                    }
+                }
+
+                sender.on('close', () =>
+                {
+                    sender_closed = true;
+                    check();
+                });
+
+                receiver.on('close', () =>
+                {
+                    receiver_closed = true;
+                    check();
+                });
 
                 function piped()
                 {
@@ -862,7 +897,8 @@ function test(type,
                                     fs.unlink(out_fname2, function (err)
                                     {
                                         if (err) { return cb(err); }
-                                        cb();
+                                        done = true;
+                                        check();
                                     });
                                 });
                             });
@@ -920,7 +956,17 @@ function test(type,
         {
             if (type === 'webtransport')
             {
-                expect(e).to.be.oneOf([err, 1]);
+                if (typeof window !== 'undefined')
+                {
+                    if (e.message !== 'The session is closed.')
+                    {
+                        expect(e).to.be.oneOf([err, 1]);
+                    }
+                }
+                else
+                {
+                    expect(e).to.be.oneOf([err, 1]);
+                }
             }
             else
             {
@@ -952,7 +998,17 @@ function test(type,
         {
             receiver.on('error', function (e)
             {
-                expect(e).to.equal(1);
+                if (typeof window !== 'undefined')
+                {
+                    if (e.message !== 'The session is closed.')
+                    {
+                        expect(e).to.equal(1);
+                    }
+                }
+                else
+                {
+                    expect(e).to.equal(1);
+                }
             });
 
             sender._mux.carrier.close({
@@ -1037,12 +1093,14 @@ function test(type,
         {
             sender.on('error', function (e)
             {
-                expect(e.message).to.equal('The operation was aborted');
+                expect(e.message).to.equal(typeof window !== 'undefined' && sender.name === 'client' ?
+                    'The session is closed.' : 'The operation was aborted');
             });
 
             receiver.on('error', function (e)
             {
-                expect(e.message).to.equal('The operation was aborted');
+                expect(e.message).to.equal(typeof window !== 'undefined' && receiver.name === 'client' ?
+                    'The session is closed.' : 'The operation was aborted');
             });
 
             sender._mux.carrier.close({
@@ -1474,7 +1532,10 @@ function test(type,
         {
             sender.on('error', function (e)
             {
-                expect(e.message).to.equal('The operation was aborted');
+                expect(e.message).to.be.oneOf([
+                    'The operation was aborted',
+                    'The session is closed.'
+                ]);
                 cb();
             });
 
@@ -1570,7 +1631,10 @@ function test(type,
         {
             receiver.on('error', err =>
             {
-                expect(err.message).to.equal('The operation was aborted');
+                expect(err.message).to.be.oneOf([
+                    'The operation was aborted',
+                    'Received RESET_STREAM.'
+                ]);
             });
         }
 

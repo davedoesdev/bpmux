@@ -77,6 +77,8 @@ module.exports = function (grunt)
             nw_build: [
                 'rsync -a node_modules test/fixtures/nw --exclude nw-builder --exclude malformed_package_json --delete',
                 'BABEL_ENV=test npx babel --config-file ./test/fixtures/nw/.babelrc.json test/fixtures/nw/node_modules/http2-duplex/server.js --out-file test/fixtures/nw/node_modules/http2_duplex_server.js --source-maps',
+                'BABEL_ENV=test npx babel --config-file ./test/fixtures/nw/.babelrc.json test/fixtures/nw/node_modules/@fails-components/webtransport/src/webtransport.js --out-file test/fixtures/nw/node_modules/@fails-components/webtransport/src/webtransport.cjs --source-maps',
+                "sed -i -e 's/\\(_require = \\).*/\\1require;/' -e 's/\\(dirname = \\).*/\\1__dirname;/' test/fixtures/nw/node_modules/@fails-components/webtransport/src/webtransport.cjs",
                 'cp index.js test/fixtures/nw/node_modules/bpmux.js',
                 'cp test/test_browser.js test/fixtures/nw/node_modules',
                 'cp test/test_comms.js test/fixtures/nw/node_modules',

@@ -863,7 +863,7 @@ function BPMux(carrier, options)
                             }
                             else
                             {
-                                await readable.abort(err.message);
+                                await readable.cancel(err.message);
                             }
                         }
                         catch (ex)
@@ -1810,7 +1810,7 @@ BPMux.prototype.multiplex = function (options)
                             }
                             else
                             {
-                                await readable.abort(err.message);
+                                await readable.cancel(err.message);
                             }
                         }
                         catch (ex)

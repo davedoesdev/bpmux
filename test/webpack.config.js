@@ -14,7 +14,7 @@ module.exports = {
     resolve: {
         fallback: {
             util: 'util',
-            stream: 'stream-browserify',
+            stream: path.join(path.dirname(__dirname), 'readable-stream.js'),
             crypto: 'crypto-browserify',
             buffer: 'buffer'
         },
