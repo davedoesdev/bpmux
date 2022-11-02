@@ -240,7 +240,10 @@ function test(type,
                 'write EPIPE',
                 'Cannot call write after a stream was destroyed',
                 'Failed to fetch',
-                'network error'
+                'network error',
+                'Received RESET_STREAM.',
+                'The session is closed.',
+                'already exists'
             ]);
         }
 
@@ -330,18 +333,18 @@ function test(type,
 
     function both(f)
     {
-        return function (initiator_duplex, responder_duplex, cb)
+        return function (initiator_duplex, responder_duplex, cb, n)
         {
             const ths = this;
             async.parallel([
                 function (cb)
                 {
-                    f.call(ths, initiator_duplex, responder_duplex, cb);
+                    f.call(ths, initiator_duplex, responder_duplex, cb, n);
                 },
 
                 function (cb)
                 {
-                    f.call(ths, responder_duplex, initiator_duplex, cb);
+                    f.call(ths, responder_duplex, initiator_duplex, cb, n);
                 }
             ], cb);
         };
@@ -416,7 +419,7 @@ function test(type,
                 {
                     if (initiator_duplex)
                     {
-                        f.call(ths, initiator_duplex, responder_duplex, cb);
+                        f.call(ths, initiator_duplex, responder_duplex, cb, n);
                     }
                     else
                     {
@@ -462,7 +465,7 @@ function test(type,
                         {
                             _mux: responder_mux,
                             name: responder_mux.name
-                        }, cb);
+                        }, cb, n);
                     if (responder_duplex && responder_duplex.handshake_data)
                     {
                         responder_duplex.emit('handshake', responder_duplex.handshake_data);
@@ -550,7 +553,7 @@ function test(type,
 
     function large_buffer(sender, receiver, cb)
     {
-        var buf = make_buffer(sender, 32 * 1024), bufs = [], count = 0;
+        var buf = make_buffer(sender, (type === 'webtransport' ? 65 : 32) * 1024), bufs = [], count = 0;
         buf.fill('a');
 
         receiver.on('readable', function ()
@@ -741,11 +744,7 @@ function test(type,
 
         sender.on(is_passthru ? 'close' : 'finish', function ()
         {
-            if (fast && (sender.name === 'server') && (typeof window !== 'undefined'))
-            {
-                expect(drains).to.equal(0);
-            }
-            else if (fast && (type !== 'http2-session'))
+            if (fast && (type !== 'http2-session'))
             {
                 expect(drains).to.equal(726);
             }
@@ -1552,7 +1551,7 @@ function test(type,
     }
     /*jslint unparam: false */
 
-    function drain_event(sender, receiver, cb)
+    function drain_event(sender, receiver, cb, n)
     {
         var send_buf = get_crypto(sender).randomBytes(50 * 1024),
             receive_bufs = [],
@@ -1633,6 +1632,7 @@ function test(type,
             {
                 expect(err.message).to.be.oneOf([
                     'The operation was aborted',
+                    'The stream was aborted by the remote server',
                     'Received RESET_STREAM.'
                 ]);
             });
@@ -2120,8 +2120,7 @@ function test(type,
 
         calln('should handle write backpressure',
               write_backpressure,
-              10,
-              false);
+              10);
 
         calln('should handle flow mode',
               flow_mode);
@@ -2371,7 +2370,14 @@ function test(type,
             {
                 duplex.on('error', err =>
                 {
-                    expect(err.message).to.equal('The operation was aborted');
+                    expect(err.message).to.be.oneOf(
+                    [
+                        'The operation was aborted',
+                        'Received RESET_STREAM.',
+                        'The stream was aborted by the remote server',
+                        'The session is closed.',
+                        'STOP_SENDING.'
+                    ]);
                 });
             };
             client_mux.on('peer_multiplex', onpm);
@@ -2424,7 +2430,12 @@ function test(type,
                 {
                     client_duplex100.on('error', function (err)
                     {
-                        expect(err.message).to.equal('The operation was aborted');
+                        expect(err.message).to.be.oneOf(
+                        [
+                            'The operation was aborted',
+                            'The session is closed.',
+                            'Received RESET_STREAM.'
+                        ]);
                     });
                 }
             }
@@ -2434,7 +2445,11 @@ function test(type,
                 {
                     throw ex;
                 }
-                expect(ex.message).to.equal('already exists');
+                expect(ex.message).to.be.oneOf(
+                [
+                    'already exists',
+                    'Received RESET_STREAM.' // from peer losing due to already exists
+                ]);
                 setTimeout(client100, Math.random() * 2000);
             }
         }
@@ -2476,7 +2491,12 @@ function test(type,
                 {
                     server_duplex100.on('error', function (err)
                     {
-                        expect(err.message).to.equal('The operation was aborted');
+                        expect(err.message).to.be.oneOf(
+                        [
+                            'The operation was aborted',
+                            'The session is closed.',
+                            'Received RESET_STREAM.'
+                        ]);
                     });
                 }
             }
@@ -2486,7 +2506,11 @@ function test(type,
                 {
                     throw ex;
                 }
-                expect(ex.message).to.equal('already exists');
+                expect(ex.message).to.be.oneOf(
+                [
+                    'already exists',
+                    'Received RESET_STREAM.' // from peer losing due to already exists
+                ]);
                 setTimeout(server100, Math.random() * 2000);
             }
         }
@@ -2528,7 +2552,12 @@ function test(type,
                 {
                     client_duplex200.on('error', function (err)
                     {
-                        expect(err.message).to.equal('The operation was aborted');
+                        expect(err.message).to.be.oneOf(
+                        [
+                            'The operation was aborted',
+                            'The session is closed.',
+                            'Received RESET_STREAM.'
+                        ]);
                     });
                 }
             }
@@ -2538,7 +2567,11 @@ function test(type,
                 {
                     throw ex;
                 }
-                expect(ex.message).to.equal('already exists');
+                expect(ex.message).to.oneOf(
+                [
+                    'already exists',
+                    'Received RESET_STREAM.' // from peer losing due to already exists
+                ]);
                 setTimeout(client200, Math.random() * 2000);
             }
         }
@@ -2580,7 +2613,12 @@ function test(type,
                 {
                     server_duplex200.on('error', function (err)
                     {
-                        expect(err.message).to.equal('The operation was aborted');
+                        expect(err.message).to.be.oneOf(
+                        [
+                            'The operation was aborted',
+                            'The session is closed.',
+                            'Received RESET_STREAM.'
+                        ]);
                     });
                 }
             }
@@ -2590,7 +2628,11 @@ function test(type,
                 {
                     throw ex;
                 }
-                expect(ex.message).to.equal('already exists');
+                expect(ex.message).to.oneOf(
+                [
+                    'already exists',
+                    'Received RESET_STREAM.' // from peer losing due to already exists
+                ]);
                 setTimeout(server200, Math.random() * 2000);
             }
         }
@@ -3204,12 +3246,14 @@ function test(type,
             expect(err.message).to.be.oneOf([
                 'write after end',
                 'carrier stream finished before duplex finished',
+                'carrier stream closed before duplex closed',
                 'carrier stream ended before end message received',
                 'The operation was aborted'
             ]);
 
             if ((err.message === 'carrier stream finished before duplex finished') ||
-                (err.message === 'carrier stream ended before end message received'))
+                (err.message === 'carrier stream ended before end message received') ||
+                (err.message === 'carrier stream closed before duplex closed'))
             {
                 expect(err.carrier_done).to.equal(true);
             }

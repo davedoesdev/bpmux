@@ -33,7 +33,7 @@ module.exports.Duplex.fromWeb = function(pair, options) {
             try {
                 callback(error);
             } catch (ex) {
-                duplex.destroy(ex);
+                process.nextTick(() => duplex.destroy(ex));
             }
         },
 
@@ -58,7 +58,7 @@ module.exports.Duplex.fromWeb = function(pair, options) {
                 try {
                     callback(error);
                 } catch (ex) {
-                    duplex.destroy(ex);
+                    process.nextTick(() => duplex.destroy(ex));
                 }
             }
         },
@@ -68,7 +68,7 @@ module.exports.Duplex.fromWeb = function(pair, options) {
                 const chunk = await reader.read();
                 duplex.push(chunk.done ? null : chunk.value);
             } catch (ex) {
-                duplex.destroy(ex);
+                process.nextTick(() => duplex.destroy(ex));
             }
         },
 

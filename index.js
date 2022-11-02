@@ -828,11 +828,19 @@ function BPMux(carrier, options)
 
                 let stream_reader, duplex;
 
-                const close = async err =>
+                const close = async (err, reason) =>
                 {
-                    if (!err.message)
+                    if (err && !err.message)
                     {
                         err = new Error(err);
+                    }
+                    if (err && !reason)
+                    {
+                        reason = err.message;
+                    }
+                    const emit_error = e =>
+                    {
+                        process.nextTick(() => this.emit('error', e));
                     }
                     if (duplex)
                     {
@@ -842,186 +850,198 @@ function BPMux(carrier, options)
                         }
                         catch (ex)
                         {
-                            this.emit('error', ex);
+                            emit_error(ex);
                         }
                     }
                     else
                     {
                         try
                         {
-                            await writable.abort(err.message);
+                            await writable.abort(reason);
                         }
                         catch (ex)
                         {
-                            this.emit('error', ex);
+                            emit_error(ex);
                         }
                         try
                         {
                             if (stream_reader)
                             {
-                                await stream_reader.cancel(err.message);
+                                await stream_reader.cancel(reason);
                             }
                             else
                             {
-                                await readable.cancel(err.message);
+                                await readable.cancel(reason);
                             }
                         }
                         catch (ex)
                         {
-                            this.emit('error', ex);
+                            emit_error(ex);
                         }
                     }
-                    this.emit('error', err);
+                    if (err)
+                    {
+                        emit_error(err);
+                    }
                 };
 
                 try
                 {
-                    stream_reader = readable.getReader();
                     if ((this._max_open > 0) && (this.duplexes.size === this._max_open))
                     {
                         this.emit('full');
-                        await close('full');
+                        await close(null, 'full');
                         continue;
-                    }
-
-                    const nreader = create_nreader(stream_reader);
-
-                    ({ done, value } = await nreader.read(4));
-                    if (done)
-                    {
-                        await close('failed to read channel number');
-                        continue;
-                    }
-                    const channel = value.readUint32BE();
-
-                    ({ done, value } = await nreader.read(4));
-                    if (done)
-                    {
-                        await close('failed to read handshake length');
-                        continue;
-                    }
-                    const len = value.readUint32BE();
-                    if ((this._max_header_size > 0) && (len > this._max_header_size))
-                    {
-                        await close('handshake too big');
-                        continue;
-                    }
-
-                    if (len > 0)
-                    {
-                        ({ done, value } = await nreader.read(len));
-                        if (done)
-                        {
-                            await close('failed to read handshake');
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        value = Buffer.alloc(0);
-                    }
-
-                    if (this.duplexes.has(channel))
-                    {
-                        await close('already exists');
-                        continue;
-                    }
-
-                    stream_reader.releaseLock();
-                    stream_reader = null;
-
-                    // Work around https://github.com/nodejs/node/issues/42694
-                    // until https://github.com/nodejs/node/pull/45026 is merged
-                    const orig_getReader = readable.getReader;
-                    readable.getReader = function ()
-                    {
-                        const reader = orig_getReader.apply(this, arguments);
-                        Object.defineProperty(reader, 'closed',
-                        {
-                            value: new Promise(() => {}),
-                            writable: false
-                        });
-                        return reader;
-                    };
-
-                    duplex = Duplex.fromWeb({ writable, readable }, this._peer_multiplex_options);
-                    duplex.cork();
-                    duplex.push(Buffer.from(nreader.overflow));
-
-                    this._add_wt_duplex(duplex, channel);
-                    this.emit('peer_multiplex', duplex);
-
-                    let handshake_delayed = false;
-                    this._parse_wt_handshake(duplex, value, () =>
-                    {
-                        handshake_delayed = true;
-                        let delayed_handshake;
-                        const uncork = duplex.uncork;
-                        duplex.uncork = () =>
-                        {
-                            duplex.uncork = uncork;
-                            if (!duplex.destroyed) // Node 12 calls uncork on end even if destroyed
-                            {
-                                if (!delayed_handshake)
-                                {
-                                    delayed_handshake = Buffer.alloc(0);
-                                }
-                                const state = duplex._writableState;
-                                if (delayed_handshake.length > 0)
-                                {
-                                    state.buffered.unshift({
-                                        chunk: delayed_handshake,
-                                        encoding: null,
-                                        callback: () => {}
-                                    });
-                                    state.length += delayed_handshake.length;
-                                }
-                                const lenbuf = Buffer.alloc(4);
-                                lenbuf.writeUint32BE(delayed_handshake.length);
-                                state.buffered.unshift({
-                                    chunk: lenbuf,
-                                    encoding: null,
-                                    callback: () => {}
-                                });
-                                state.length += lenbuf.length;
-                                duplex._handshake_sent = true;
-                                this.emit('handshake_sent', duplex, true);
-                                duplex.emit('handshake_sent', true);
-                                duplex.uncork();
-                            }
-                        };
-                        return handshake =>
-                        {
-                            delayed_handshake = handshake;
-                            duplex.uncork();
-                        };
-                    });
-
-                    if (handshake_delayed)
-                    {
-                        this.emit('pre_handshake_sent', duplex, true);
-                        duplex.emit('pre_handshake_sent', true);
-                    }
-                    else
-                    {
-                        const state = duplex._writableState;
-                        const lenbuf = Buffer.alloc(4);
-                        state.buffered.unshift({
-                            chunk: lenbuf,
-                            encoding: null,
-                            callback: () => {}
-                        });
-                        state.length += lenbuf.length;
-                        duplex._handshake_sent = true;
-                        this.emit('handshake_sent', duplex, true);
-                        duplex.emit('handshake_sent', true);
-                        duplex.uncork();
                     }
                 }
                 catch (ex)
                 {
                     await close(ex);
                 }
+
+                (async () =>
+                {
+                    try
+                    {
+                        stream_reader = readable.getReader();
+                        const nreader = create_nreader(stream_reader);
+
+                        ({ done, value } = await nreader.read(4));
+                        if (done)
+                        {
+                            return await close('failed to read channel number');
+                        }
+                        const channel = value.readUint32BE();
+
+                        ({ done, value } = await nreader.read(4));
+                        if (done)
+                        {
+                            return await close('failed to read handshake length');
+                        }
+                        const len = value.readUint32BE();
+                        if ((this._max_header_size > 0) && (len > this._max_header_size))
+                        {
+                            return await close('handshake too big');
+                        }
+
+                        if (len > 0)
+                        {
+                            ({ done, value } = await nreader.read(len));
+                            if (done)
+                            {
+                                return await close('failed to read handshake');
+                            }
+                        }
+                        else
+                        {
+                            value = Buffer.alloc(0);
+                        }
+
+                        if (this.duplexes.has(channel))
+                        {
+                            return await close('already exists');
+                        }
+
+                        stream_reader.releaseLock();
+                        stream_reader = null;
+
+                        // Work around https://github.com/nodejs/node/issues/42694
+                        // until https://github.com/nodejs/node/pull/45026 is merged
+                        const orig_getReader = readable.getReader;
+                        readable.getReader = function ()
+                        {
+                            const reader = orig_getReader.apply(this, arguments);
+                            Object.defineProperty(reader, 'closed',
+                            {
+                                value: new Promise(() => {}),
+                                writable: false
+                            });
+                            return reader;
+                        };
+
+                        duplex = Duplex.fromWeb({ writable, readable },
+                        {
+                            allowHalfOpen: true,
+                            ...this._peer_multiplex_options
+                        });
+                        duplex.cork();
+                        duplex.push(Buffer.from(nreader.overflow));
+
+                        this._add_wt_duplex(duplex, channel);
+                        this.emit('peer_multiplex', duplex);
+
+                        let handshake_delayed = false;
+                        this._parse_wt_handshake(duplex, value, () =>
+                        {
+                            handshake_delayed = true;
+                            let delayed_handshake;
+                            const uncork = duplex.uncork;
+                            duplex.uncork = () =>
+                            {
+                                duplex.uncork = uncork;
+                                if (!duplex.destroyed) // Node 12 calls uncork on end even if destroyed
+                                {
+                                    if (!delayed_handshake)
+                                    {
+                                        delayed_handshake = Buffer.alloc(0);
+                                    }
+                                    const state = duplex._writableState;
+                                    if (delayed_handshake.length > 0)
+                                    {
+                                        state.buffered.unshift({
+                                            chunk: delayed_handshake,
+                                            encoding: null,
+                                            callback: () => {}
+                                        });
+                                        state.length += delayed_handshake.length;
+                                    }
+                                    const lenbuf = Buffer.alloc(4);
+                                    lenbuf.writeUint32BE(delayed_handshake.length);
+                                    state.buffered.unshift({
+                                        chunk: lenbuf,
+                                        encoding: null,
+                                        callback: () => {}
+                                    });
+                                    state.length += lenbuf.length;
+                                    duplex._handshake_sent = true;
+                                    this.emit('handshake_sent', duplex, true);
+                                    duplex.emit('handshake_sent', true);
+                                    duplex.uncork();
+                                }
+                            };
+                            return handshake =>
+                            {
+                                delayed_handshake = handshake;
+                                duplex.uncork();
+                            };
+                        });
+
+                        if (handshake_delayed)
+                        {
+                            this.emit('pre_handshake_sent', duplex, true);
+                            duplex.emit('pre_handshake_sent', true);
+                        }
+                        else
+                        {
+                            const state = duplex._writableState;
+                            const lenbuf = Buffer.alloc(4);
+                            state.buffered.unshift({
+                                chunk: lenbuf,
+                                encoding: null,
+                                callback: () => {}
+                            });
+                            state.length += lenbuf.length;
+                            duplex._handshake_sent = true;
+                            this.emit('handshake_sent', duplex, true);
+                            duplex.emit('handshake_sent', true);
+                            duplex.uncork();
+                        }
+                    }
+                    catch (ex)
+                    {
+                        await close(ex);
+                    }
+                })();
             }
         })();
 
@@ -1766,6 +1786,7 @@ BPMux.prototype.multiplex = function (options)
             return new Promise(async (resolve, reject) => // eslint-disable-line no-async-promise-executor
             {
                 let { writable, readable } = await ths.carrier.createBidirectionalStream();
+
                 let writer, reader, duplex;
 
                 async function close(err)
@@ -1774,6 +1795,10 @@ BPMux.prototype.multiplex = function (options)
                     {
                         err = new Error(err);
                     }
+                    const emit_error = e =>
+                    {
+                        process.nextTick(() => ths.emit('error', e));
+                    };
                     if (duplex)
                     {
                         try
@@ -1782,7 +1807,7 @@ BPMux.prototype.multiplex = function (options)
                         }
                         catch (ex)
                         {
-                            ths.emit('error', ex);
+                            emit_error(ex);
                         }
                     }
                     else
@@ -1800,7 +1825,7 @@ BPMux.prototype.multiplex = function (options)
                         }
                         catch (ex)
                         {
-                            ths.emit('error', ex);
+                            emit_error(ex);
                         }
                         try
                         {
@@ -1815,10 +1840,10 @@ BPMux.prototype.multiplex = function (options)
                         }
                         catch (ex)
                         {
-                            ths.emit('error', ex);
+                            emit_error(ex);
                         }
                     }
-                    reject(err);
+                    process.nextTick(() => reject(err));
                 }
 
                 try
@@ -1892,7 +1917,11 @@ BPMux.prototype.multiplex = function (options)
                         return reader;
                     };
 
-                    duplex = Duplex.fromWeb({ writable, readable }, options);
+                    duplex = Duplex.fromWeb({ writable, readable },
+                    {
+                        allowHalfOpen: true,
+                        ...options
+                    });
                     duplex.push(Buffer.from(nreader.overflow));
                     ths._add_wt_duplex(duplex, channel);
 

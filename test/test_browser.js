@@ -227,21 +227,54 @@ module.exports = function (BrowserPrimus, // will be using browser transport
             })();
         },
         BrowserBPMux,
-        async (server, cb) => {
-            const client = new BrowserWebTransport(`https://127.0.0.1:${server_port}/test`, {
-                serverCertificateHashes: [{
-                    algorithm: 'sha-256',
-                    value: new Uint8Array(
-                        new crypto.X509Certificate(fs.readFileSync(path.join(__dirname, 'certs', 'server.crt')))
-                            .fingerprint256.split(':').map(el => parseInt(el, 16)))
-                }]
-            });
-            await client.ready;
-            cb(client);
+        (server, cb) => {
+            let i = 0;
+            const connect = async () => {
+                let client;
+                let should_retry = true;
+                const maybe_retry = err => {
+                    console.error(err);
+                    if (should_retry) {
+                        should_retry = false;
+                        if (++i === 10) {
+                            return cb(err);
+                        }
+                        console.log("RETRYING", i);
+                        setTimeout(connect, 200);
+                    }
+                };
+                try {
+                    client = new BrowserWebTransport(`https://127.0.0.1:${server_port}/test`, {
+                        serverCertificateHashes: [{
+                            algorithm: 'sha-256',
+                            value: new Uint8Array(
+                                new crypto.X509Certificate(fs.readFileSync(path.join(__dirname, 'certs', 'server.crt')))
+                                    .fingerprint256.split(':').map(el => parseInt(el, 16)))
+                        }]
+                    });
+                    (async () => {
+                        try {
+                            await client.closed;
+                        } catch (ex) {
+                            maybe_retry(err);
+                        }
+                    })();
+                    await client.ready;
+                } catch (ex) {
+                    return maybe_retry(ex);
+                }
+                should_retry = false;
+                cb(client);
+            };
+            connect();
         },
         function (client, cb) {
             (async () => {
-                await client.closed;
+                try {
+                    await client.closed;
+                } catch (ex) {
+                    return cb(ex);
+                }
                 cb();
             })();
             client.close({
