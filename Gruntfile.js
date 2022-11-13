@@ -3,16 +3,6 @@
 
 var path = require('path');
 
-// Stop process.exit() being called, which hangs process
-// due to webtransport native code not being cleaned up
-require('grunt-legacy-util').exit = code =>
-{
-    if (code)
-    {
-        process.exitCode = code;
-    }
-};
-
 // Enable passing options in title (WithOptions in test/test_comms.js)
 require('mocha/lib/utils').isString = function (obj)
 {
@@ -77,8 +67,9 @@ module.exports = function (grunt)
             nw_build: [
                 'rsync -a node_modules test/fixtures/nw --exclude nw-builder --exclude malformed_package_json --delete',
                 'BABEL_ENV=test npx babel --config-file ./test/fixtures/nw/.babelrc.json test/fixtures/nw/node_modules/http2-duplex/server.js --out-file test/fixtures/nw/node_modules/http2_duplex_server.js --source-maps',
-                'BABEL_ENV=test npx babel --config-file ./test/fixtures/nw/.babelrc.json test/fixtures/nw/node_modules/@fails-components/webtransport/src/webtransport.js --out-file test/fixtures/nw/node_modules/@fails-components/webtransport/src/webtransport.cjs --source-maps',
-                "sed -i -e 's/\\(_require = \\).*/\\1require;/' -e 's/\\(dirname = \\).*/\\1__dirname;/' test/fixtures/nw/node_modules/@fails-components/webtransport/src/webtransport.cjs",
+                'for f in test/fixtures/nw/node_modules/@fails-components/webtransport/lib/*.js; do BABEL_ENV=test npx babel --config-file ./test/fixtures/nw/.babelrc.json $f --out-file $f --source-maps; done',
+                 "sed -i -e 's/\\(_require = \\).*/\\1require;/' -e 's/\\(dirname = \\).*/\\1__dirname;/' test/fixtures/nw/node_modules/@fails-components/webtransport/lib/native.js",
+                'sed -i s/module/commonjs/ test/fixtures/nw/node_modules/@fails-components/webtransport/package.json',
                 'cp index.js test/fixtures/nw/node_modules/bpmux.js',
                 'cp test/test_browser.js test/fixtures/nw/node_modules',
                 'cp test/test_comms.js test/fixtures/nw/node_modules',
@@ -122,6 +113,7 @@ module.exports = function (grunt)
         'exec:certs',
         'exec:bundle',
         'exec:nw_build',
+        'intercept-exit',
         'exec:bpmux_test'
     ]);
     grunt.registerTask('docs', 'apidox');
@@ -138,5 +130,18 @@ module.exports = function (grunt)
             primus = Primus.createServer({ port: 7000 });
         primus.save(path.join(__dirname, 'test', 'fixtures', 'nw', 'primus.js'));
         primus.destroy();
+    });
+
+    grunt.registerTask('intercept-exit', function ()
+    {
+        // Stop process.exit() being called, which hangs process
+        // due to webtransport native code not being cleaned up
+        require('grunt-legacy-util').exit = code =>
+        {
+            if (code)
+            {
+                process.exitCode = code;
+            }
+        };
     });
 };

@@ -10,6 +10,15 @@ function isWritableEnded(stream) {
   return wState.ended;
 }
 
+function ensure_error(err) {
+    if (typeof err === 'number') {
+        const code = err;
+        err = new Error(`Web error ${code}`);
+        err.web_code = code;
+    }
+    return err;
+}
+
 module.exports.Duplex.fromWeb = function(pair, options) {
     const writer = pair.writable.getWriter();
     const reader = pair.readable.getReader();
@@ -23,11 +32,17 @@ module.exports.Duplex.fromWeb = function(pair, options) {
         async write(chunk, encoding, callback) {
             let error = null;
 
+            if (this.wup === undefined) {
+                this.wup = 0;
+                this.foo = Math.random();
+            }
+            this.wup += chunk.length;
+
             try {
                 await writer.ready;
                 await writer.write(chunk);
             } catch (ex) {
-                error = ex;
+                error = ensure_error(ex);
             }
 
             try {
@@ -47,12 +62,13 @@ module.exports.Duplex.fromWeb = function(pair, options) {
                     // This change may fix it:
                     // https://github.com/chromium/chromium/commit/6f868b76a0dae219c9950360a47931c196d0fa94
                     // So try removing the line below when nw.js
-                    // goes to chromium 109
+                    // goes to chromium 109 - although that may cause final
+                    // packet to get lost because of the abort?
                     writerClosed = true; 
 
                     await writer.close();
                 } catch (ex) {
-                    error = ex;
+                    error = ensure_error(ex);
                 }
 
                 try {
@@ -68,7 +84,7 @@ module.exports.Duplex.fromWeb = function(pair, options) {
                 const chunk = await reader.read();
                 duplex.push(chunk.done ? null : chunk.value);
             } catch (ex) {
-                process.nextTick(() => duplex.destroy(ex));
+                process.nextTick(() => duplex.destroy(ensure_error(ex)));
             }
         },
 
@@ -88,7 +104,7 @@ module.exports.Duplex.fromWeb = function(pair, options) {
                 ]);
             } catch (ex) {
                 if (!error) {
-                    error = ex;
+                    error = ensure_error(ex);
                 }
             }
 
@@ -106,7 +122,7 @@ module.exports.Duplex.fromWeb = function(pair, options) {
         } catch (ex) {
             writerClosed = true;
             readerClosed = true;
-            return duplex.destroy(ex);
+            return duplex.destroy(ensure_error(ex));
         }
 
         writerClosed = true;
@@ -121,7 +137,7 @@ module.exports.Duplex.fromWeb = function(pair, options) {
         } catch (ex) {
             writerClosed = true;
             readerClosed = true;
-            return duplex.destroy(ex);
+            return duplex.destroy(ensure_error(ex));
         }
 
         readerClosed = true;

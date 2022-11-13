@@ -49,7 +49,7 @@ console.trace = function trace()
     this.error(err.stack);
 };
 
-function doit()
+async function doit()
 {
     if (process.env.TEST_ERR_FILE)
     {

@@ -232,7 +232,7 @@ function test(type,
                 }
             }
 
-            expect(err.message).to.be.oneOf([
+            const expected_messages = [
                 'write after end',
                 'This socket has been ended by the other party',
                 'read ECONNRESET',
@@ -244,7 +244,16 @@ function test(type,
                 'Received RESET_STREAM.',
                 'The session is closed.',
                 'already exists'
-            ]);
+            ];
+
+            if (type === 'webtransport') {
+                expected_messages.push(
+                    'Web error 0',
+                    'Web error 1'
+                );
+            }
+
+            expect(err.message).to.be.oneOf(expected_messages);
         }
 
         make_server(function (c)
@@ -553,7 +562,7 @@ function test(type,
 
     function large_buffer(sender, receiver, cb)
     {
-        var buf = make_buffer(sender, (type === 'webtransport' ? 65 : 32) * 1024), bufs = [], count = 0;
+        var buf = make_buffer(sender, (type === 'webtransport' ? 129 : 32) * 1024), bufs = [], count = 0;
         buf.fill('a');
 
         receiver.on('readable', function ()
@@ -806,7 +815,8 @@ function test(type,
             if (remaining_in === 0)
             {
                 expect(receive_hash.digest('hex')).to.equal(send_hash.digest('hex'));
-                cb();
+                receiver.on('close', cb);
+                sender.end();
             }
         });
 
@@ -957,14 +967,18 @@ function test(type,
             {
                 if (typeof window !== 'undefined')
                 {
-                    if (e.message !== 'The session is closed.')
-                    {
-                        expect(e).to.be.oneOf([err, 1]);
-                    }
+                    expect(e.message).to.be.oneOf([
+                        err.message,
+                        'The session is closed.',
+                        'Web error 1'
+                    ]);
                 }
                 else
                 {
-                    expect(e).to.be.oneOf([err, 1]);
+                    expect(e.message).to.be.oneOf([
+                        err.message,
+                        'Web error 1'
+                    ]);
                 }
             }
             else
@@ -981,7 +995,10 @@ function test(type,
         {
             if (type === 'webtransport')
             {
-                expect(e).to.be.oneOf([err, 1]);
+                expect(e.message).to.be.oneOf([
+                    err.message,
+                    'Web error 1'
+                ]);
             }
             else
             {
@@ -999,14 +1016,14 @@ function test(type,
             {
                 if (typeof window !== 'undefined')
                 {
-                    if (e.message !== 'The session is closed.')
-                    {
-                        expect(e).to.equal(1);
-                    }
+                    expect(e.message).to.be.oneOf([
+                        'The session is closed.',
+                        'Web error 1'
+                    ]);
                 }
                 else
                 {
-                    expect(e).to.equal(1);
+                    expect(e.message).to.equal('Web error 1');
                 }
             });
 
@@ -2115,7 +2132,8 @@ function test(type,
         if (!is_passthru)
         {
             calln('should be able to delay status messages',
-                  delay_status);
+                  delay_status,
+                  null);
         }
 
         calln('should handle write backpressure',
@@ -2434,6 +2452,7 @@ function test(type,
                         [
                             'The operation was aborted',
                             'The session is closed.',
+                            'The stream was aborted by the remote server',
                             'Received RESET_STREAM.'
                         ]);
                     });
@@ -2448,7 +2467,8 @@ function test(type,
                 expect(ex.message).to.be.oneOf(
                 [
                     'already exists',
-                    'Received RESET_STREAM.' // from peer losing due to already exists
+                    'Received RESET_STREAM.', // from peer losing due to already exists
+                    'Web error 0'
                 ]);
                 setTimeout(client100, Math.random() * 2000);
             }
@@ -2495,6 +2515,7 @@ function test(type,
                         [
                             'The operation was aborted',
                             'The session is closed.',
+                            'The stream was aborted by the remote server',
                             'Received RESET_STREAM.'
                         ]);
                     });
@@ -2509,7 +2530,8 @@ function test(type,
                 expect(ex.message).to.be.oneOf(
                 [
                     'already exists',
-                    'Received RESET_STREAM.' // from peer losing due to already exists
+                    'Received RESET_STREAM.', // from peer losing due to already exists
+                    'Web error 0'
                 ]);
                 setTimeout(server100, Math.random() * 2000);
             }
@@ -2556,6 +2578,7 @@ function test(type,
                         [
                             'The operation was aborted',
                             'The session is closed.',
+                            'The stream was aborted by the remote server',
                             'Received RESET_STREAM.'
                         ]);
                     });
@@ -2570,7 +2593,8 @@ function test(type,
                 expect(ex.message).to.oneOf(
                 [
                     'already exists',
-                    'Received RESET_STREAM.' // from peer losing due to already exists
+                    'Received RESET_STREAM.', // from peer losing due to already exists
+                    'Web error 0'
                 ]);
                 setTimeout(client200, Math.random() * 2000);
             }
@@ -2617,6 +2641,7 @@ function test(type,
                         [
                             'The operation was aborted',
                             'The session is closed.',
+                            'The stream was aborted by the remote server',
                             'Received RESET_STREAM.'
                         ]);
                     });
@@ -2631,7 +2656,8 @@ function test(type,
                 expect(ex.message).to.oneOf(
                 [
                     'already exists',
-                    'Received RESET_STREAM.' // from peer losing due to already exists
+                    'Received RESET_STREAM.', // from peer losing due to already exists
+                    'Web error 0'
                 ]);
                 setTimeout(server200, Math.random() * 2000);
             }
@@ -2821,7 +2847,25 @@ function test(type,
             handle_err(await client_mux.multiplex());
             third_client = await client_mux.multiplex();
             handle_err(third_client);
-            handle_err(await client_mux.multiplex());
+            if (type === 'webtransport')
+            {
+                try
+                {
+                    handle_err(await client_mux.multiplex());
+                }
+                catch (ex)
+                {
+                    expect(ex.message).to.equal(
+                    [
+                        'The session is closed.',
+                        'Received RESET_STREAM.'
+                    ]);
+                }
+            }
+            else
+            {
+                handle_err(client_mux.multiplex());
+            }
         })();
     });
 

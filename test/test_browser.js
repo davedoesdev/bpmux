@@ -25,6 +25,16 @@ console.trace = function trace() // eslint-disable-line no-console
     this.error(err.stack);
 };
 
+process.on('uncaughtException', err =>
+{
+    console.log("UE", err);
+});
+
+process.on('unhandledRejection', err =>
+{
+    console.log("UR", err);
+});
+
 // Enable passing options in title (WithOptions in test/test_comms.js)
 require('mocha/lib/utils').isString = function (obj)
 {
@@ -60,7 +70,7 @@ module.exports = function (BrowserPrimus, // will be using browser transport
     });
 
     mocha.suite.emit('pre-require', global, null, mocha);
-/*
+
     require('test_comms')(
         'primus',
         BPMux,
@@ -104,7 +114,7 @@ module.exports = function (BrowserPrimus, // will be using browser transport
             {
                 return cb();
             }
-            conn.on('end', cb);
+            conn.on('close', cb);
             conn.end();
         },
         BrowserBuffer,
@@ -181,19 +191,19 @@ module.exports = function (BrowserPrimus, // will be using browser transport
             {
                 return cb();
             }
-            conn.on('end', cb);
+            conn.on('close', cb);
             conn.end();
         },
         BrowserBuffer,
         browser_crypto,
         browser_frame,
         true);
-*/
+
     require('test_comms')(
         'webtransport',
         BPMux,
-        (conn_cb, cb) => {
-            const { Http3Server } = require('@fails-components/webtransport/src/webtransport.cjs');
+        async (conn_cb, cb) => {
+            const { Http3Server } = require('@fails-components/webtransport');
             const server = new Http3Server({
                 port: server_port,
                 host: '127.0.0.1',
