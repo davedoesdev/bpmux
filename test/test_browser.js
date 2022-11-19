@@ -24,7 +24,7 @@ console.trace = function trace() // eslint-disable-line no-console
     Error.captureStackTrace(err, trace);
     this.error(err.stack);
 };
-
+/*
 process.on('uncaughtException', err =>
 {
     console.log("UE", err);
@@ -34,7 +34,7 @@ process.on('unhandledRejection', err =>
 {
     console.log("UR", err);
 });
-
+*/
 // Enable passing options in title (WithOptions in test/test_comms.js)
 require('mocha/lib/utils').isString = function (obj)
 {
@@ -202,7 +202,8 @@ module.exports = function (BrowserPrimus, // will be using browser transport
     require('test_comms')(
         'webtransport',
         BPMux,
-        async (conn_cb, cb) => {
+        async (conn_cb, cb) =>
+        {
             const { Http3Server } = require('@fails-components/webtransport');
             const server = new Http3Server({
                 port: server_port,
@@ -212,12 +213,15 @@ module.exports = function (BrowserPrimus, // will be using browser transport
                 privKey: fs.readFileSync(path.join(__dirname, 'certs', 'server.key'))
             });
             server.startServer();
-            (async () => {
+            (async () =>
+            {
                 const session_stream = server.sessionStream('/test');
                 const session_reader = session_stream.getReader();
-                while (true) { // eslint-disable-line no-constant-condition
+                while (true) // eslint-disable-line no-constant-condition
+                {
                     const { done, value } = await session_reader.read();
-                    if (done) {
+                    if (done)
+                    {
                         return;
                     }
                     await value.ready;
@@ -226,34 +230,43 @@ module.exports = function (BrowserPrimus, // will be using browser transport
             })();
             cb(server);
         },
-        (server, cb) => {
+        (server, cb) =>
+        {
             server.stopServer();
             cb();
         },
-        (wt, cb) => {
-            (async () => {
+        (wt, cb) =>
+        {
+            (async () =>
+            {
                 await wt.closed;
                 cb();
             })();
         },
         BrowserBPMux,
-        (server, cb) => {
+        (server, cb) =>
+        {
             let i = 0;
-            const connect = async () => {
+            const connect = async () =>
+            {
                 let client;
                 let should_retry = true;
-                const maybe_retry = err => {
+                const maybe_retry = err =>
+                {
                     console.error(err);
-                    if (should_retry) {
+                    if (should_retry)
+                    {
                         should_retry = false;
-                        if (++i === 10) {
+                        if (++i === 10)
+                        {
                             return cb(err);
                         }
                         console.log("RETRYING", i);
                         setTimeout(connect, 200);
                     }
                 };
-                try {
+                try
+                {
                     client = new BrowserWebTransport(`https://127.0.0.1:${server_port}/test`, {
                         serverCertificateHashes: [{
                             algorithm: 'sha-256',
@@ -262,15 +275,21 @@ module.exports = function (BrowserPrimus, // will be using browser transport
                                     .fingerprint256.split(':').map(el => parseInt(el, 16)))
                         }]
                     });
-                    (async () => {
-                        try {
+                    (async () =>
+                    {
+                        try
+                        {
                             await client.closed;
-                        } catch (ex) {
-                            maybe_retry(err);
+                        }
+                        catch (ex)
+                        {
+                            maybe_retry(ex);
                         }
                     })();
                     await client.ready;
-                } catch (ex) {
+                }
+                catch (ex)
+                {
                     return maybe_retry(ex);
                 }
                 should_retry = false;
@@ -278,16 +297,22 @@ module.exports = function (BrowserPrimus, // will be using browser transport
             };
             connect();
         },
-        function (client, cb) {
-            (async () => {
-                try {
+        function (client, cb)
+        {
+            (async () =>
+            {
+                try
+                {
                     await client.closed;
-                } catch (ex) {
+                }
+                catch (ex)
+                {
                     return cb(ex);
                 }
                 cb();
             })();
-            client.close({
+            client.close(
+            {
                 closeCode: 0,
                 reason: ''
             });

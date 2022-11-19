@@ -674,14 +674,14 @@ function BPMux(carrier, options)
     options = Object.assign(
     {
         max_open: 0,
-        max_header_size: 0,
+        max_header_size: 512 * 1024,
         keep_alive: 30 * 1000
     }, options);
 
     this._peer_multiplex_options = options.peer_multiplex_options;
     this._max_duplexes = Math.pow(2, 31);
     this._max_open = options.max_open;
-    this._max_header_size = options.max_header_size === undefined ? (512 * 1024) : options.max_header_size;
+    this._max_header_size = options.max_header_size;
     this.duplexes = new Map();
     this._chan = 0;
     this._chan_offset = options.high_channels ? this._max_duplexes : 0;
@@ -867,7 +867,7 @@ function BPMux(carrier, options)
                     const emit_error = e =>
                     {
                         process.nextTick(() => this.emit('error', ensure_error(e)));
-                    }
+                    };
                     if (duplex)
                     {
                         try
@@ -881,7 +881,7 @@ function BPMux(carrier, options)
                     }
                     else
                     {
-                        writable.abort(reason).catch(emit_error);;
+                        writable.abort(reason).catch(emit_error);
 
                         if (stream_reader)
                         {
@@ -983,6 +983,8 @@ function BPMux(carrier, options)
                         this._add_wt_duplex(duplex, channel);
                         this.emit('peer_multiplex', duplex);
 
+                        function callback() {}
+
                         let handshake_delayed = false;
                         this._parse_wt_handshake(duplex, value, () =>
                         {
@@ -1004,7 +1006,7 @@ function BPMux(carrier, options)
                                         state.buffered.unshift({
                                             chunk: delayed_handshake,
                                             encoding: null,
-                                            callback: () => {}
+                                            callback
                                         });
                                         state.length += delayed_handshake.length;
                                     }
@@ -1013,7 +1015,7 @@ function BPMux(carrier, options)
                                     state.buffered.unshift({
                                         chunk: lenbuf,
                                         encoding: null,
-                                        callback: () => {}
+                                        callback
                                     });
                                     state.length += lenbuf.length;
                                     duplex._handshake_sent = true;
@@ -1041,7 +1043,7 @@ function BPMux(carrier, options)
                             state.buffered.unshift({
                                 chunk: lenbuf,
                                 encoding: null,
-                                callback: () => {}
+                                callback
                             });
                             state.length += lenbuf.length;
                             duplex._handshake_sent = true;

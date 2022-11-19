@@ -433,6 +433,7 @@ grunt lint
 - <a name="toc_bpmuxeventsdrain"></a>[BPMux.events.drain](#bpmuxeventsdrain)
 - <a name="toc_bpmuxeventsend"></a>[BPMux.events.end](#bpmuxeventsend)
 - <a name="toc_bpmuxeventsfinish"></a>[BPMux.events.finish](#bpmuxeventsfinish)
+- <a name="toc_bpmuxeventsclose"></a>[BPMux.events.close](#bpmuxeventsclose)
 - <a name="toc_bpmuxeventsfull"></a>[BPMux.events.full](#bpmuxeventsfull)
 - <a name="toc_bpmuxeventsremovedduplex"></a>[BPMux.events.removed](#bpmuxeventsremovedduplex)
 - <a name="toc_bpmuxeventskeep_alive"></a>[BPMux.events.keep_alive](#bpmuxeventskeep_alive)
@@ -474,7 +475,7 @@ are required because HTTP/2 push streams are unidirectional.
 
   - `{Integer} [max_open]` Maximum number of multiplexed streams that can be open at a time. Defaults to 0 (no maximum).
 
-  - `{Integer} [max_header_size]` `BPMux` adds a control header to each message it sends, which the receiver reads into memory. The header is of variable length &mdash; for example, handshake messages contain handshake data which can be supplied by the application. `max_header_size` is the maximum number of header bytes to read into memory. If a larger header is received, `BPMux` emits an `error` event. Defaults to 0 (no limit).
+  - `{Integer} [max_header_size]` `BPMux` adds a control header to each message it sends, which the receiver reads into memory. The header is of variable length &mdash; for example, handshake messages contain handshake data which can be supplied by the application. `max_header_size` is the maximum number of header bytes to read into memory. If a larger header is received, `BPMux` emits an `error` event. Defaults to 512KiB. Set to 0 for no limit.
 
   - `{Integer|false}` `keep_alive` Send a single byte keep-alive message every N milliseconds. Defaults to 30000 (30 seconds). Pass `false` to disable.
 
@@ -578,6 +579,14 @@ no more data).
 
 A `BPMux` object emits a `finish` event after the carrier stream finishes (won't
 write any more data).
+
+<sub>Go: [TOC](#tableofcontents) | [BPMux.events](#toc_bpmuxevents)</sub>
+
+## BPMux.events.close()
+
+> `close` event
+
+A `BPMux` object emits a `close` event after the carrier stream has ended and finished.
 
 <sub>Go: [TOC](#tableofcontents) | [BPMux.events](#toc_bpmuxevents)</sub>
 

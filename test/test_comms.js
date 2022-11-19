@@ -246,7 +246,8 @@ function test(type,
                 'already exists'
             ];
 
-            if (type === 'webtransport') {
+            if (type === 'webtransport')
+            {
                 expected_messages.push(
                     'Web error 0',
                     'Web error 1'
@@ -562,7 +563,7 @@ function test(type,
 
     function large_buffer(sender, receiver, cb)
     {
-        var buf = make_buffer(sender, (type === 'webtransport' ? 129 : 32) * 1024), bufs = [], count = 0;
+        var buf = make_buffer(sender, (type === 'webtransport' ? 1024 : 32) * 1024), bufs = [], count = 0;
         buf.fill('a');
 
         receiver.on('readable', function ()
@@ -1568,7 +1569,7 @@ function test(type,
     }
     /*jslint unparam: false */
 
-    function drain_event(sender, receiver, cb, n)
+    function drain_event(sender, receiver, cb, unused_n)
     {
         var send_buf = get_crypto(sender).randomBytes(50 * 1024),
             receive_bufs = [],
@@ -2141,7 +2142,8 @@ function test(type,
               10);
 
         calln('should handle flow mode',
-              flow_mode);
+              flow_mode,
+              null);
 
         calln('should be able to pipe',
               pipe,
@@ -2918,10 +2920,21 @@ function test(type,
 
     it('should be able to emit error on and end peer duplex', function (cb)
     {
+        let error, bufs = [], ended = false, cb_called = false;
+
+        function check()
+        {
+            if (ended && cb_called)
+            {
+                expect(Buffer.concat(bufs).toString()).to.equal('hello');
+                expect(error.message).to.equal(
+                    type === 'webtransport' ? 'The operation was aborted' : 'peer error');
+                cb();
+            }
+        }
+
         server_mux.on('handshake', function (duplex)
         {
-            var error, bufs = [];
-
             duplex.on('error', function (err)
             {
                 error = err;
@@ -2939,10 +2952,8 @@ function test(type,
 
             duplex.on(type === 'webtransport' ? 'close' : 'end', function ()
             {
-                expect(Buffer.concat(bufs).toString()).to.equal('hello');
-                expect(error.message).to.equal(
-                    type === 'webtransport' ? 'The operation was aborted' : 'peer error');
-                cb();
+                ended = true;
+                check();
             });
         });
 
@@ -2951,7 +2962,50 @@ function test(type,
             var duplex = await client_mux.multiplex();
             csebemr(duplex);
 
-            duplex.peer_error_then_end('hello');
+            duplex.peer_error_then_end('hello', null, function ()
+            {
+                cb_called = true;
+                check();
+            });
+        })();
+    });
+
+    it('peer_error_then_end should callback with error if write fails', function (cb)
+    {
+        (async () =>
+        {
+            let client_errored = false, server_errored = false;
+
+            function check()
+            {
+                if (client_errored && server_errored)
+                {
+                    cb();
+                }
+            }
+
+            server_mux.on('handshake', function (duplex)
+            {
+                duplex.on('error', function (err)
+                {
+                    if (err.message === (type === 'webtransport' ? 'The operation was aborted' : 'peer error'))
+                    {
+                        server_errored = true;
+                        check();
+                    }
+                });
+            });
+
+            var duplex = await client_mux.multiplex();
+            csebemr(duplex);
+
+            duplex.end();
+            duplex.peer_error_then_end('hello', null, function (err)
+            {
+                expect(err.message).to.equal('write after end');
+                client_errored = true;
+                check();
+            });
         })();
     });
 

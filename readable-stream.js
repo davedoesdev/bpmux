@@ -1,13 +1,21 @@
+/*eslint-env node */
+/*eslint brace-style: "error" */
 'use strict';
 
 module.exports = require('readable-stream');
 
 function isWritableEnded(stream) {
-  if (stream.writableEnded === true) return true;
-  const wState = stream._writableState;
-  if (wState?.errored) return false;
-  if (typeof wState?.ended !== 'boolean') return null;
-  return wState.ended;
+    if (stream.writableEnded === true) {
+        return true;
+    }
+    const wState = stream._writableState;
+    if (wState?.errored) {
+        return false;
+    }
+    if (typeof wState?.ended !== 'boolean') {
+        return null;
+    }
+    return wState.ended;
 }
 
 function ensure_error(err) {
@@ -111,7 +119,9 @@ module.exports.Duplex.fromWeb = function(pair, options) {
             try {
                 callback(error);
             } catch (ex) {
-                process.nextTick(() => { throw ex; });
+                process.nextTick(() => {
+                    throw ex;
+                });
             }
         }
     });

@@ -68,7 +68,7 @@ module.exports = function (grunt)
                 'rsync -a node_modules test/fixtures/nw --exclude nw-builder --exclude malformed_package_json --delete',
                 'BABEL_ENV=test npx babel --config-file ./test/fixtures/nw/.babelrc.json test/fixtures/nw/node_modules/http2-duplex/server.js --out-file test/fixtures/nw/node_modules/http2_duplex_server.js --source-maps',
                 'for f in test/fixtures/nw/node_modules/@fails-components/webtransport/lib/*.js; do BABEL_ENV=test npx babel --config-file ./test/fixtures/nw/.babelrc.json $f --out-file $f --source-maps; done',
-                 "sed -i -e 's/\\(_require = \\).*/\\1require;/' -e 's/\\(dirname = \\).*/\\1__dirname;/' test/fixtures/nw/node_modules/@fails-components/webtransport/lib/native.js",
+                "sed -i -e 's/\\(_require = \\).*/\\1require;/' -e 's/\\(dirname = \\).*/\\1__dirname;/' test/fixtures/nw/node_modules/@fails-components/webtransport/lib/native.js",
                 'sed -i s/module/commonjs/ test/fixtures/nw/node_modules/@fails-components/webtransport/package.json',
                 'cp index.js test/fixtures/nw/node_modules/bpmux.js',
                 'cp test/test_browser.js test/fixtures/nw/node_modules',
@@ -96,11 +96,13 @@ module.exports = function (grunt)
     grunt.registerTask('lint', 'eslint');
     grunt.registerTask('test', [
         'exec:certs',
+        'intercept-exit',
         'mochaTest:default'
     ]);
     grunt.registerTask('test-fast', [
         'exec:certs',
         'env:fast',
+        'intercept-exit',
         'mochaTest:default'
     ]);
     grunt.registerTask('test-inline', 'mochaTest:inline');
@@ -113,7 +115,6 @@ module.exports = function (grunt)
         'exec:certs',
         'exec:bundle',
         'exec:nw_build',
-        'intercept-exit',
         'exec:bpmux_test'
     ]);
     grunt.registerTask('docs', 'apidox');
