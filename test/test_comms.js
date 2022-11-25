@@ -243,7 +243,8 @@ function test(type,
                 'network error',
                 'Received RESET_STREAM.',
                 'The session is closed.',
-                'already exists'
+                'already exists',
+                'test: should handle exception when parsing handshake'
             ];
 
             if (type === 'webtransport')
@@ -3405,6 +3406,48 @@ function test(type,
             stream.Readable.from(random()).pipe(stream2);
         })();
     });
+
+    if (type === 'webtransport')
+    {
+        it('should handle exception thrown when processing duplex', function (cb)
+        {
+            let duplex_errored = false, client_errored = false;
+
+            function check()
+            {
+                if (duplex_errored && client_errored)
+                {
+                    cb();
+                }
+            }
+
+            server_mux.on('peer_multiplex', function (duplex)
+            {
+                duplex.on('error', function (err)
+                {
+                    expect(err.message).to.equal('test: should handle exception when parsing handshake');
+                    duplex_errored = true;
+                    check();
+                });
+
+                throw new Error('test: should handle exception when parsing handshake');
+            });
+
+            (async () =>
+            {
+                try
+                {
+                    await client_mux.multiplex();
+                }
+                catch (ex)
+                {
+                    expect(ex.message).to.equal('Web error 0');
+                    client_errored = true;
+                    check();
+                }
+            })();
+        });
+    }
 }
 
 module.exports = function(

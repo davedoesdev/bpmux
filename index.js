@@ -836,7 +836,7 @@ function BPMux(carrier, options)
         {
             while (true) // eslint-disable-line no-constant-condition
             {
-                let value, writable, readable, done;
+                let done, value, writable, readable;
 
                 try
                 {
@@ -882,15 +882,7 @@ function BPMux(carrier, options)
                     else
                     {
                         writable.abort(reason).catch(emit_error);
-
-                        if (stream_reader)
-                        {
-                            stream_reader.cancel(reason).catch(emit_error);
-                        }
-                        else
-                        {
-                            readable.cancel(reason).catch(emit_error);
-                        }
+                        (stream_reader || readable).cancel(reason).catch(emit_error);
                     }
                     if (err)
                     {
@@ -898,18 +890,21 @@ function BPMux(carrier, options)
                     }
                 };
 
-                try
+                if ((this._max_open > 0) && (this.duplexes.size === this._max_open))
                 {
-                    if ((this._max_open > 0) && (this.duplexes.size === this._max_open))
+                    try
                     {
                         this.emit('full');
                         close(null, 'full');
+                    }
+                    catch (ex)
+                    {
+                        close(ex);
+                    }
+                    finally
+                    {
                         continue;
                     }
-                }
-                catch (ex)
-                {
-                    close(ex);
                 }
 
                 (async () =>
@@ -1800,7 +1795,7 @@ BPMux.prototype.multiplex = function (options)
         {
             return new Promise(async (resolve, reject) => // eslint-disable-line no-async-promise-executor
             {
-                let writable, readable, writer, reader, duplex;
+                let writable, readable, writer, reader;
 
                 function close(err)
                 {
@@ -1812,37 +1807,8 @@ BPMux.prototype.multiplex = function (options)
                     {
                         process.nextTick(() => ths.emit('error', ensure_error(e)));
                     };
-                    if (duplex)
-                    {
-                        try
-                        {
-                            duplex.destroy(err);
-                        }
-                        catch (ex)
-                        {
-                            emit_error(ex);
-                        }
-                    }
-                    else
-                    {
-                        if (writer)
-                        {
-                            writer.abort(err.message).catch(emit_error);
-                        }
-                        else if (writable)
-                        {
-                            writable.abort(err.message).catch(emit_error);
-                        }
-
-                        if (reader)
-                        {
-                            reader.cancel(err.message).catch(emit_error);
-                        }
-                        else if (readable)
-                        {
-                            readable.cancel(err.message).catch(emit_error);
-                        }
-                    }
+                    (writer || writable)?.abort(err.message).catch(emit_error);
+                    (reader || readable)?.cancel(err.message).catch(emit_error);
                     process.nextTick(() => reject(ensure_error(err)));
                 }
 
@@ -1919,7 +1885,7 @@ BPMux.prototype.multiplex = function (options)
                         return reader;
                     };
 
-                    duplex = intercept_errors(Duplex.fromWeb({ writable, readable },
+                    const duplex = intercept_errors(Duplex.fromWeb({ writable, readable },
                     {
                         allowHalfOpen: true,
                         ...options
