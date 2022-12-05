@@ -499,6 +499,20 @@ function create_nreader(reader)
     };
 }
 
+function b64_decoded_length(encoded)
+{
+    let r = 3 * (encoded.length / 4);
+    if (encoded.slice(-2, -1) === '=')
+    {
+        --r;
+    }
+    if (encoded.slice(-1) === '=')
+    {
+        --r;
+    }
+    return r;
+}
+
 function BPDuplex(options, mux, chan)
 {
     Duplex.call(this, options);
@@ -622,6 +636,10 @@ function ensure_error(err)
         err = new Error(`Web error ${code}`);
         err.web_code = code;
     }
+    else if (typeof err === 'string')
+    {
+        err = new Error(err);
+    };
     return err;
 }
 
@@ -718,11 +736,25 @@ function BPMux(carrier, options)
                     endStream: true
                 });
             }
+            const handshake_data = headers['bpmux-handshake'] || '';
+            if (handshake_data)
+            {
+                if ((this._max_header_size > 0) &&
+                    (b64_decoded_length(handshake_data) > this._max_header_size))
+                {
+                    process.nextTick(() => this.emit('error', new Error('handshake too big')));
+                    return duplex.respond({
+                        [http2.constants.HTTP2_HEADER_STATUS]: 431
+                    }, {
+                        endStream: true
+                    });
+                }
+            }
             duplex.cork();
             this._add_http2_duplex(duplex, channel);
             this.emit('peer_multiplex', duplex);
             let handshake_delayed = false;
-            this._parse_http2_handshake(duplex, headers, () =>
+            this._parse_http2_handshake(duplex, handshake_data, () =>
             {
                 handshake_delayed = true;
                 let delayed_handshake;
@@ -856,10 +888,6 @@ function BPMux(carrier, options)
 
                 const close = (err, reason) =>
                 {
-                    if (typeof err === 'string')
-                    {
-                        err = new Error(err);
-                    }
                     if (err && !reason)
                     {
                         reason = err.message;
@@ -870,14 +898,7 @@ function BPMux(carrier, options)
                     };
                     if (duplex)
                     {
-                        try
-                        {
-                            duplex.destroy(err);
-                        }
-                        catch (ex)
-                        {
-                            emit_error(ex);
-                        }
+                        duplex.destroy(err);
                     }
                     else
                     {
@@ -914,11 +935,16 @@ function BPMux(carrier, options)
                         stream_reader = readable.getReader();
                         const nreader = create_nreader(stream_reader);
 
-                        ({ done, value } = await nreader.read(4));
-                        if (done)
+                        function throw_if(v, msg)
                         {
-                            return close('failed to read channel number');
+                            if (v)
+                            {
+                                throw new Error(msg);
+                            }
                         }
+
+                        ({ done, value } = await nreader.read(4));
+                        throw_if(done, 'failed to read channel number');
                         const channel = value.readUint32BE();
 
                         ({ done, value } = await nreader.read(4));
@@ -1779,14 +1805,25 @@ BPMux.prototype.multiplex = function (options)
                 const status = headers[http2.constants.HTTP2_HEADER_STATUS];
                 if (status !== 200)
                 {
-                    const msg = `peer returned status ${status} for channel ${channel}`;
-                    const err = new Error(msg);
+                    const err = new Error(`peer returned status ${status} for channel ${channel}`);
                     err.status = status;
                     err.duplex = duplex;
                     duplex.destroy(err);
-                    return ths.emit('error', err);
+                    return ths.emit('error', err, duplex);
                 }
-                ths._parse_http2_handshake(duplex, headers, null);
+                const handshake_data = headers['bpmux-handshake'] || '';
+                if (handshake_data)
+                {
+                    if ((ths._max_header_size > 0) &&
+                        (b64_decoded_length(handshake_data) > ths._max_header_size))
+                    {
+                        const err = new Error('handshake too big');
+                        err.duplex = duplex;
+                        duplex.destroy(err);
+                        return ths.emit('error', err, duplex);
+                    }
+                }
+                ths._parse_http2_handshake(duplex, handshake_data, null);
             });
             return duplex;
         }
@@ -1995,13 +2032,12 @@ BPMux.prototype._make_http2_handshake = function (handshake)
     };
 };
 
-BPMux.prototype._parse_http2_handshake = function (duplex, headers, delay_handshake)
+BPMux.prototype._parse_http2_handshake = function (duplex, handshake_data, delay_handshake)
 {
     duplex._handshake_received = true;
-    let handshake_data = Buffer.alloc(0);
     try
     {
-        handshake_data = Buffer.from(headers['bpmux-handshake'], 'base64');
+        handshake_data = Buffer.from(handshake_data, 'base64');
         if (this._parse_handshake_data)
         {
             handshake_data = this._parse_handshake_data(handshake_data);

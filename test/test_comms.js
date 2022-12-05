@@ -2872,52 +2872,167 @@ function test(type,
         })();
     });
 
-    it(new WithOptions('should be able to limit header size',
-                       {
-                           max_header_size: 64 * 1024
-                       }),
-    function (cb)
+    for (const max_header_size of [64, 64 * 1024])
     {
-        server_mux.on('peer_multiplex', csebemr);
+        const expect_refuse = (type == 'http2-session') &&
+                              (max_header_size > require('http2').getDefaultSettings().maxHeaderSize);
 
-        (async () =>
+        it(new WithOptions(`server should be able to limit header size to ${max_header_size}`,
+                           {
+                               max_header_size
+                           }),
+        function (cb)
         {
-            var duplex = await client_mux.multiplex();
-            csebemr(duplex);
-            duplex.on('handshake', async function ()
+            server_mux.on('handshake', function ()
             {
-                server_mux.on('handshake', function ()
-                {
-                    cb(new Error('should not be called'));
-                });
+                cb(new Error('should not be called'));
+            });
 
-                server_mux.once('error', function (err)
-                {
-                    expect(err.message).to.equal(
-                        (type === 'webtransport' ? 'handshake' : 'header') + ' too big');
-                    cb();
-                });
+            server_mux.once('error', function (err)
+            {
+                expect(err.message).to.equal(
+                    (is_passthru ? 'handshake' : 'header') + ' too big');
+                cb();
+            });
 
-                const duplex2 = await client_mux.multiplex(
+            (async () =>
+            {
+                if (type === 'webtransport')
                 {
-                    handshake_data: Buffer.alloc(128 * 1024)
-                });
-
-                if (type === 'http2-session')
-                {
-                    duplex2.on('error', function (err)
+                    try
                     {
-                        expect(err.message).to.equal('Stream closed with error code NGHTTP2_REFUSED_STREAM');
-                        cb();
+                        await client_mux.multiplex(
+                        {
+                            handshake_data: Buffer.alloc(max_header_size + 1)
+                        });
+                    }
+                    catch (ex)
+                    {
+                        expect(ex.message).to.equal('Web error 0');
+                    }
+                }
+                else
+                {
+                    const duplex = await client_mux.multiplex(
+                    {
+                        handshake_data: Buffer.alloc(max_header_size + 1)
+                    });
+
+                    if (type === 'http2-session')
+                    {
+                        const expected_msg = expect_refuse ?
+                            'Session closed with error code 9' :
+                            'peer returned status 431 for channel 0';
+
+                        client_mux.once('error', function (err)
+                        {
+                            expect(err.message).to.equal(expected_msg);
+                        });
+
+                        duplex.once('error', function (err)
+                        {
+                            expect(err.message).to.equal(expected_msg);
+                            if (expect_refuse)
+                            {
+                                cb();
+                            }
+                        });
+                    }
+                    else
+                    {
+                        csebemr(duplex);
+                    }
+                }
+            })();
+        });
+
+        it(new WithOptions(`client should be able to limit header size to ${max_header_size}`,
+                           {
+                               max_header_size
+                           }),
+        function (cb)
+        {
+            server_mux.on('peer_multiplex', function (duplex)
+            {
+                if (expect_refuse)
+                {
+                    duplex.once('error', function (err)
+                    {
+                        expect(err.message).to.equal('Session closed with error code 9');
                     });
                 }
                 else
                 {
-                    csebemr(duplex2);
+                    csebemr(duplex);
                 }
             });
-        })();
-    });
+
+            server_mux.on('handshake', function (duplex, data, delay)
+            {
+                delay()(Buffer.alloc(max_header_size + 1));
+            });
+
+            (async () =>
+            {
+                if (type === 'webtransport')
+                {
+                    try
+                    {
+                        await client_mux.multiplex();
+                    }
+                    catch (ex)
+                    {
+                        expect(ex.message).to.equal('handshake too big');
+                        cb();
+                    }
+                }
+                else
+                {
+                    if (type === 'http2-session')
+                    {
+                        if (expect_refuse)
+                        {
+                            server_mux.once('error', function (err)
+                            {
+                                expect(err.message).to.equal('Session closed with error code 9');
+                                cb();
+                            });
+                        }
+                        else
+                        {
+                            client_mux.once('error', function (err)
+                            {
+                                expect(err.message).to.equal('handshake too big');
+                                cb();
+                            });
+                        }
+                    }
+                    else
+                    {
+                        client_mux.once('error', function (err)
+                        {
+                            expect(err.message).to.equal('header too big');
+                            cb();
+                        });
+                    }
+
+                    const duplex = await client_mux.multiplex();
+
+                    if ((type === 'http2-session') && !expect_refuse)
+                    {
+                        duplex.once('error', function (err)
+                        {
+                            expect(err.message).to.equal('handshake too big');
+                        });
+                    }
+                    else
+                    {
+                        csebemr(duplex);
+                    }
+                }
+            })();
+        });
+    }
 
     it('should be able to emit error on and end peer duplex', function (cb)
     {

@@ -11,7 +11,8 @@ const server_port = 7000;
 function make_server(port, cb) {
     const server = http2.createSecureServer({
         key: fs.readFileSync(path.join(__dirname, 'certs', 'server.key')),
-        cert: fs.readFileSync(path.join(__dirname, 'certs', 'server.crt'))
+        cert: fs.readFileSync(path.join(__dirname, 'certs', 'server.crt')),
+        maxSendHeaderBlockLength: 100000
     });
 
     server.bpmux_sessions = new Set();
@@ -28,7 +29,8 @@ function connect(to, from, cb) {
     http2.connect(
         `https://localhost:${to.address().port}`,
         {
-            ca: fs.readFileSync(path.join(__dirname, 'certs', 'ca.crt'))
+            ca: fs.readFileSync(path.join(__dirname, 'certs', 'ca.crt')),
+            maxSendHeaderBlockLength: 100000
         },
         function () {
             from.bpmux_sessions.add(this);
