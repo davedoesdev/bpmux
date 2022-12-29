@@ -3562,6 +3562,119 @@ function test(type,
                 }
             })();
         });
+
+        it('should handle exception thrown after reader closed', function (cb)
+        {
+            let errors = 0;
+
+            function check()
+            {
+                if (++errors >= 2)
+                {
+                    cb();
+                }
+            }
+
+            server_mux.on('peer_multiplex', function (duplex)
+            {
+                duplex.once('error', function (err)
+                {
+                    expect(err.message).to.equal('The operation was aborted');
+                    check();
+                });
+            });
+
+            const orig_fromWeb = stream.Duplex.fromWeb;
+            stream.Duplex.fromWeb = function (pair, options)
+            {
+                if (!options.highWaterMark)
+                {
+                    stream.Duplex.fromWeb = orig_fromWeb;
+                    throw new Error('foo');
+                }
+                return orig_fromWeb.apply(this, arguments);
+            };
+
+            (async () =>
+            {
+                try
+                {
+                    await client_mux.multiplex();
+                }
+                catch (ex)
+                {
+                    expect(ex.message).to.equal('foo');
+                    check();
+                }
+            })();
+        });
+
+        it('client should handle closed before handshake received', function (cb)
+        {
+            server_mux.on('peer_multiplex', function (duplex)
+            {
+                duplex.on('error', function (err)
+                {
+                    expect(err.message).to.equal('The operation was aborted');
+                });
+                duplex.end();
+            });
+
+            (async () =>
+            {
+                try
+                {
+                    await client_mux.multiplex();
+                }
+                catch (ex)
+                {
+                    expect(ex.message).to.equal('failed to read handshake length');
+                    cb();
+                }
+            })();
+        });
+
+        it('server should handle closed before handshake received', function (cb)
+        {
+            server_mux.on('error', function (err)
+            {
+                expect(err.message).to.equal('failed to read handshake length');
+                cb();
+            });
+
+            (async () =>
+            {
+                try
+                {
+                    const orig_createBidirectionalStream = client_mux.carrier.createBidirectionalStream;
+                    client_mux.carrier.createBidirectionalStream = async function ()
+                    {
+                        const r = await orig_createBidirectionalStream.apply(this, arguments);
+                        const orig_getWriter = r.writable.getWriter;
+                        r.writable.getWriter = function ()
+                        {
+                            const w = orig_getWriter.apply(this, arguments);
+                            const orig_write = w.write;
+                            w.write = async function ()
+                            {
+                                const v = await orig_write.apply(this, arguments);
+                                await this.close();
+
+                                return v;
+                            };
+                            return w;
+                        };
+                        return r;
+                    };
+                    await client_mux.multiplex();
+                }
+                catch (ex)
+                {
+                    expect(ex.message).to.equal('WritableStream is closed');
+                    expect(ex.code).to.equal('ERR_INVALID_STATE');
+                }
+            })();
+        });
     }
 }
 
