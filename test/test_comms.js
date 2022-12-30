@@ -3675,6 +3675,41 @@ function test(type,
                 }
             })();
         });
+
+        it('server should handle error from closed promise', function (cb)
+        {
+            server_mux.on('error', function (err)
+            {
+                expect(err.message).to.equal('foo');
+                cb();
+            });
+
+            server_mux.carrier.closedReject(new Error('foo'));
+        });
+
+        it('server should handle error from bidi reader', function (cb)
+        {
+            server_mux.on('error', function (err)
+            {
+                expect(err.message).to.equal('bar');
+
+                const orig_close = server_mux.carrier.incomBiDiController.close;
+                server_mux.carrier.incomBiDiController.close = function ()
+                {
+                    try
+                    {
+                        orig_close.apply(this, arguments);
+                    }
+                    catch (ex)
+                    {
+                        expect(ex.message).to.equal('Invalid state: Controller is already closed');
+                    }
+                };
+                cb();
+            });
+
+            server_mux.carrier.incomBiDiController.error(new Error('bar'));
+        });
     }
 }
 

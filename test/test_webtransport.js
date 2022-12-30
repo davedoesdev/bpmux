@@ -45,7 +45,11 @@ require('./test_comms')(
     },
     (wt, cb) => {
         (async () => {
-            await wt.closed;
+            try {
+                await wt.closed;
+            } catch (ex) {
+                return cb(ex);
+            }
             cb();
         })();
     },
