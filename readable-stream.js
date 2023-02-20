@@ -40,12 +40,6 @@ module.exports.Duplex.fromWeb = function(pair, options) {
         async write(chunk, encoding, callback) {
             let error = null;
 
-            if (this.wup === undefined) {
-                this.wup = 0;
-                this.foo = Math.random();
-            }
-            this.wup += chunk.length;
-
             try {
                 await writer.ready;
                 await writer.write(chunk);

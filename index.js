@@ -760,7 +760,6 @@ function BPMux(carrier, options)
                     duplex.uncork = uncork;
                     if (!duplex.destroyed) // Node 12 calls uncork on end even if destroyed
                     {
-                    //should we handle frameError?
                         duplex.respond({
                             ...response_headers,
                             ...this._make_http2_handshake(delayed_handshake)
@@ -831,6 +830,32 @@ function BPMux(carrier, options)
 
     if (carrier.incomingBidirectionalStreams)
     {
+        if (carrier.addStreamObj)
+        {
+            // Work around reset error after stream already closed in @fails-components/webtransport
+            const orig_addStreamObj = carrier.addStreamObj;
+            carrier.addStreamObj = function (stream)
+            {
+                const orig_onStreamRecvSignal = stream.onStreamRecvSignal;
+                stream.onStreamRecvSignal = function (args)
+                {
+                    if (args.nettask === 'resetStream')
+                    {
+                        const orig_error = this.readableController.error;
+                        this.readableController.error = e =>
+                        {
+                            if (!this.readableclosed)
+                            {
+                                orig_error.call(this.readableController, e);
+                            }
+                        };
+                    }
+                    orig_onStreamRecvSignal.call(this, args);
+                };
+                orig_addStreamObj.call(this, stream);
+            };
+        }
+
         const bidi_reader = carrier.incomingBidirectionalStreams.getReader();
 
         (async () =>
@@ -919,13 +944,13 @@ function BPMux(carrier, options)
                 {
                     try
                     {
-                        function throw_if(v, msg)
+                        const throw_if = (v, msg) =>
                         {
                             if (v)
                             {
                                 throw new Error(msg);
                             }
-                        }
+                        };
 
                         stream_reader = readable.getReader();
                         const nreader = create_nreader(stream_reader);
@@ -980,7 +1005,7 @@ function BPMux(carrier, options)
                         this._add_wt_duplex(duplex, channel);
                         this.emit('peer_multiplex', duplex);
 
-                        function callback() {}
+                        const callback = () => {};
 
                         let handshake_delayed = false;
                         this._parse_wt_handshake(duplex, value, () =>
@@ -1823,13 +1848,13 @@ BPMux.prototype.multiplex = function (options)
 
                 try
                 {
-                    function throw_if(v, msg)
+                    const throw_if = (v, msg) =>
                     {
                         if (v)
                         {
                             throw new Error(msg);
                         }
-                    }
+                    };
 
                     ({ writable, readable } = await ths.carrier.createBidirectionalStream());
 

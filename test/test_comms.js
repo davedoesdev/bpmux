@@ -854,6 +854,8 @@ function test(type,
             sender = tmp_receiver;
         }
 
+        receiver.on('error', console.error);
+
         tmp.tmpName(function (err, out_fname1)
         {
             if (err) { return cb(err); }
@@ -863,8 +865,8 @@ function test(type,
 
                 var out_stream1 = fs.createWriteStream(out_fname1),
                     out_stream2 = fs.createWriteStream(out_fname2),
-                    finished1 = false,
-                    finished2 = false,
+                    closed1 = false,
+                    closed2 = false,
                     done = false,
                     sender_closed = false,
                     receiver_closed = false;
@@ -917,16 +919,16 @@ function test(type,
                     });
                 }
 
-                out_stream1.on('finish', function ()
+                out_stream1.on('close', function ()
                 {
-                    finished1 = true;
-                    if (finished2) { piped(); }
+                    closed1 = true;
+                    if (closed2) { piped(); }
                 });
 
-                out_stream2.on('finish', function ()
+                out_stream2.on('close', function ()
                 {
-                    finished2 = true;
-                    if (finished1) { piped(); }
+                    closed2 = true;
+                    if (closed1) { piped(); }
                 });
 
                 receiver.pipe(out_stream1);
@@ -3031,6 +3033,59 @@ function test(type,
                     }
                 }
             })();
+        });
+    }
+
+    if (type === 'http2-session')
+    {
+        it('client stream should emit frameError', function (cb)
+        {
+            server_mux.on('handshake', function ()
+            {
+                cb(new Error('should not be called'));
+            });
+
+            const duplex = client_mux.multiplex(
+            {
+                handshake_data: Buffer.alloc(1024 * 1024)
+            });
+
+            duplex.on('frameError', function (type, code, id)
+            {
+                expect(code).to.equal(require('http2').constants.NGHTTP2_FRAME_SIZE_ERROR);
+                expect(id).to.equal(1);
+                cb();
+            });
+
+            duplex.once('error', function (err)
+            {
+                expect(err.message).to.equal('Stream closed with error code NGHTTP2_FRAME_SIZE_ERROR');
+            });
+        });
+
+        it('server stream should emit frameError', function (cb)
+        {
+            server_mux.on('peer_multiplex', function (duplex)
+            {
+                duplex.on('frameError', function (type, code, id)
+                {
+                    expect(code).to.equal(require('http2').constants.NGHTTP2_FRAME_SIZE_ERROR);
+                    expect(id).to.equal(1);
+                    cb();
+                });
+
+                duplex.once('error', function (err)
+                {
+                    expect(err.message).to.equal('Stream closed with error code NGHTTP2_FRAME_SIZE_ERROR');
+                });
+            });
+
+            server_mux.on('handshake', function (duplex, data, delay)
+            {
+                delay()(Buffer.alloc(1024 * 1024));
+            });
+
+            client_mux.multiplex();
         });
     }
 

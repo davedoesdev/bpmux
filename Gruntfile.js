@@ -78,9 +78,10 @@ module.exports = function (grunt)
                 'touch test/fixtures/nw/node_modules/fixtures/keep',
                 'mkdir -p test/fixtures/nw/node_modules/certs',
                 'cp test/certs/server.* test/fixtures/nw/node_modules/certs',
-                'npx nwbuild test/fixtures/nw/package.json "test/fixtures/nw/**" --mode build --quiet warn --platforms linux64'
+                'mkdir -p cache build',
+                'npx nwbuild test/fixtures/nw/package.json test/fixtures/nw/* --mode=build --arch=x64 --platform=linux --flavor=sdk --version=latest --cacheDir=./cache --outDir=./build'
             ].join('&&'),
-            bpmux_test: 'export TEST_ERR_FILE=/tmp/test_err_$$; ./build/bpmux-test/linux64/bpmux-test; if [ -f $TEST_ERR_FILE ]; then exit 1; fi',
+            bpmux_test: 'export TEST_ERR_FILE=/tmp/test_err_$$; ./build/bpmux-test; if [ -f $TEST_ERR_FILE ]; then exit 1; fi',
             bundle: 'npx webpack --mode production --config test/webpack.config.js',
             bundle_example: 'npx webpack --mode production --config test/webpack.example.config.js',
             certs: './test/certs/make_ca_cert.sh && ./test/certs/make_server_cert.sh'
