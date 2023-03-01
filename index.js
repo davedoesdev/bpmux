@@ -844,7 +844,17 @@ function BPMux(carrier, options)
                         const orig_error = this.readableController.error;
                         this.readableController.error = e =>
                         {
-                            if (!this.readableclosed)
+                            if (this.readableclosed)
+                            {
+                                try
+                                {
+                                    this.readableController.close();
+                                }
+                                catch
+                                {
+                                }
+                            }
+                            else
                             {
                                 orig_error.call(this.readableController, e);
                             }
@@ -1061,17 +1071,20 @@ function BPMux(carrier, options)
                         else
                         {
                             const state = duplex._writableState;
-                            const lenbuf = Buffer.alloc(4);
-                            state.buffered.unshift({
-                                chunk: lenbuf,
-                                encoding: null,
-                                callback
-                            });
-                            state.length += lenbuf.length;
-                            duplex._handshake_sent = true;
-                            this.emit('handshake_sent', duplex, true);
-                            duplex.emit('handshake_sent', true);
-                            duplex.uncork();
+                            if (!state.ended)
+                            {
+                                const lenbuf = Buffer.alloc(4);
+                                state.buffered.unshift({
+                                    chunk: lenbuf,
+                                    encoding: null,
+                                    callback
+                                });
+                                state.length += lenbuf.length;
+                                duplex._handshake_sent = true;
+                                this.emit('handshake_sent', duplex, true);
+                                duplex.emit('handshake_sent', true);
+                                duplex.uncork();
+                            }
                         }
                     }
                     catch (ex)
@@ -1178,7 +1191,7 @@ function BPMux(carrier, options)
     function error(err)
     {
         // check_remove() is always called when _finished or _ended is set on a duplex,
-        // so it will have been removed from duplex. Apart from above in end(),
+        // so it will have been removed from the mux. Apart from above in end(),
         // where the duplex is destroyed, which we check below anyway (check_remove()
         // will eventually be called there too via the duplex's 'close' handler).
         for (var duplex of ths.duplexes.values())
@@ -1843,7 +1856,7 @@ BPMux.prototype.multiplex = function (options)
                     };
                     (writer || writable)?.abort(err.message).catch(emit_error);
                     (reader || readable)?.cancel(err.message).catch(emit_error);
-                    process.nextTick(() => reject(err));
+                    process.nextTick(() => reject(ensure_error(err)));
                 }
 
                 try

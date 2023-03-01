@@ -64,7 +64,7 @@ module.exports = function (grunt)
             cover: `${c8} grunt test-fast`,
             cover_report: `${c8} report -r lcov`,
             cover_check: `${c8} check-coverage --statements 100 --branches 100 --functions 100 --lines 100`,
-            nw_build: [
+            prep_nwbuild: [
                 'rsync -a node_modules test/fixtures/nw --exclude nw-builder --exclude malformed_package_json --delete',
                 'BABEL_ENV=test npx babel --config-file ./test/fixtures/nw/.babelrc.json test/fixtures/nw/node_modules/http2-duplex/server.js --out-file test/fixtures/nw/node_modules/http2_duplex_server.js --source-maps',
                 'for f in test/fixtures/nw/node_modules/@fails-components/webtransport/lib/*.js; do BABEL_ENV=test npx babel --config-file ./test/fixtures/nw/.babelrc.json $f --out-file $f --source-maps; done',
@@ -78,8 +78,7 @@ module.exports = function (grunt)
                 'touch test/fixtures/nw/node_modules/fixtures/keep',
                 'mkdir -p test/fixtures/nw/node_modules/certs',
                 'cp test/certs/server.* test/fixtures/nw/node_modules/certs',
-                'mkdir -p cache build',
-                'npx nwbuild test/fixtures/nw/package.json test/fixtures/nw/* --mode=build --arch=x64 --platform=linux --flavor=sdk --version=latest --cacheDir=./cache --outDir=./build'
+                'mkdir -p cache build'
             ].join('&&'),
             bpmux_test: 'export TEST_ERR_FILE=/tmp/test_err_$$; ./build/bpmux-test; if [ -f $TEST_ERR_FILE ]; then exit 1; fi',
             bundle: 'npx webpack --mode production --config test/webpack.config.js',
@@ -115,7 +114,8 @@ module.exports = function (grunt)
         'save-primus',
         'exec:certs',
         'exec:bundle',
-        'exec:nw_build',
+        'exec:prep_nwbuild',
+        'nwbuild',
         'exec:bpmux_test'
     ]);
     grunt.registerTask('docs', 'apidox');
@@ -145,5 +145,37 @@ module.exports = function (grunt)
                 process.exitCode = code;
             }
         };
+    });
+
+    grunt.registerTask('nwbuild', function ()
+    {
+        const cb = this.async();
+        (async () => {
+            const package_json = 'test/fixtures/nw/package.json';
+
+            // HACK: Work around bug in nw-builder which can't copy file and directory
+            const fsp = require('fs/promises');
+            const orig_cp = fsp.cp;
+            fsp.cp = async function (from) {
+                if (!from.endsWith(package_json)) {
+                    await orig_cp.apply(this, arguments);
+                }
+            };
+
+            const nwbuild = (await import('nw-builder')).default;
+            await nwbuild({
+                srcDir: `${package_json} test/fixtures/nw`,
+                mode: 'build',
+                arch: 'x64',
+                platform: 'linux',
+                flavor: 'sdk',
+                version: 'latest',
+                cacheDir: 'cache',
+                outDir: 'build'
+            });
+
+            cb();
+        })();
+
     });
 };

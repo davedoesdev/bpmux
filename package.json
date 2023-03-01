@@ -44,7 +44,7 @@
   "devDependencies": {
     "@babel/cli": "^7.21.0",
     "@babel/core": "^7.21.0",
-    "@babel/plugin-transform-modules-commonjs": "^7.20.11",
+    "@babel/plugin-transform-modules-commonjs": "^7.21.2",
     "@fails-components/webtransport": "^0.1.5",
     "async": "^3.2.4",
     "c8": "^7.13.0",
@@ -61,7 +61,7 @@
     "http2-duplex": "^6.0.1",
     "mocha": "^10.2.0",
     "multiplex": "^6.7.0",
-    "nw-builder": "^4.0.11",
+    "nw-builder": "^4.1.0",
     "primus": "^8.0.7",
     "primus-backpressure": "^3.0.2",
     "process": "^0.11.10",

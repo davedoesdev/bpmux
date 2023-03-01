@@ -66,6 +66,8 @@ async function doit()
                                 BundledBuffer,
                                 bundled_crypto,
                                 bundled_frame,
+                                Error,
+                                bundled_stream,
                                 WebTransport,
                                 done);
     }

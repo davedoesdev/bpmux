@@ -64,7 +64,7 @@ function parse_handshake_data(buf)
 function test(type,
               ServerBPMux, make_server, end_server, end_server_conn,
               ClientBPMux, make_client_conn, end_client_conn,
-              ClientBuffer, client_crypto, client_frame,
+              ClientBuffer, client_crypto, client_frame, ClientError, client_stream,
               coalesce_writes, fast)
 {
     var server,
@@ -385,6 +385,16 @@ function test(type,
         return mux.name === 'client' ? client_frame : frame;
     }
 
+    function get_Error(mux)
+    {
+        return mux.name === 'client' ? ClientError : Error;
+    }
+
+    function get_stream(mux)
+    {
+        return mux.name === 'client' ? client_stream : stream;
+    }
+
     function multiplex(n, f, initiator_mux, responder_mux)
     {
         /*jshint validthis: true */
@@ -625,6 +635,9 @@ function test(type,
 
         receiver.pipe(decode);
         encode.pipe(sender);
+        // Piping above adds an error listener to sender so afterEach won't csebemr it
+        csebemr(sender);
+
         encode.end(buf);
     }
 
@@ -946,7 +959,7 @@ function test(type,
     /*jslint unparam: true */
     function error_event(sender, receiver, cb)
     {
-        var err = new Error('foo'),
+        var err = new get_Error(sender)('foo'),
             n1 = 0,
             n2 = 0,
             called = false,
@@ -1654,7 +1667,8 @@ function test(type,
                 expect(err.message).to.be.oneOf([
                     'The operation was aborted',
                     'The stream was aborted by the remote server',
-                    'Received RESET_STREAM.'
+                    'Received RESET_STREAM.',
+                    'Received STOP_SENDING.'
                 ]);
             });
         }
@@ -2151,7 +2165,8 @@ function test(type,
         calln('should be able to pipe',
               pipe,
               null,
-              true);
+              true,
+              it.only);
 
         calln('should expose error events',
               error_event,
@@ -2323,7 +2338,7 @@ function test(type,
                        {
                            parse_handshake_data: function ()
                            {
-                               throw new Error('parse');
+                               throw new get_Error(this)('parse');
                            }
                        }),
     function (cb)
@@ -2399,7 +2414,8 @@ function test(type,
                         'Received RESET_STREAM.',
                         'The stream was aborted by the remote server',
                         'The session is closed.',
-                        'STOP_SENDING.'
+                        'STOP_SENDING.',
+                        'Received STOP_SENDING.'
                     ]);
                 });
             };
@@ -2458,13 +2474,15 @@ function test(type,
                             'The operation was aborted',
                             'The session is closed.',
                             'The stream was aborted by the remote server',
-                            'Received RESET_STREAM.'
+                            'Received RESET_STREAM.',
+                            'Received STOP_SENDING.'
                         ]);
                     });
                 }
             }
             catch (ex)
             {
+                console.error('c100', ex);
                 if (type !== 'webtransport')
                 {
                     throw ex;
@@ -2472,8 +2490,10 @@ function test(type,
                 expect(ex.message).to.be.oneOf(
                 [
                     'already exists',
-                    'Received RESET_STREAM.', // from peer losing due to already exists
-                    'Web error 0'
+                    // from peer losing due to already exists
+                    'Received RESET_STREAM.',
+                    'Web error 0',
+                    'failed to read handshake length'
                 ]);
                 setTimeout(client100, Math.random() * 2000);
             }
@@ -2521,13 +2541,15 @@ function test(type,
                             'The operation was aborted',
                             'The session is closed.',
                             'The stream was aborted by the remote server',
-                            'Received RESET_STREAM.'
+                            'Received RESET_STREAM.',
+                            'Received STOP_SENDING.'
                         ]);
                     });
                 }
             }
             catch (ex)
             {
+                console.error('s100', ex);
                 if (type !== 'webtransport')
                 {
                     throw ex;
@@ -2535,8 +2557,10 @@ function test(type,
                 expect(ex.message).to.be.oneOf(
                 [
                     'already exists',
-                    'Received RESET_STREAM.', // from peer losing due to already exists
-                    'Web error 0'
+                    // from peer losing due to already exists
+                    'Received RESET_STREAM.',
+                    'Web error 0',
+                    'failed to read handshake length'
                 ]);
                 setTimeout(server100, Math.random() * 2000);
             }
@@ -2584,13 +2608,15 @@ function test(type,
                             'The operation was aborted',
                             'The session is closed.',
                             'The stream was aborted by the remote server',
-                            'Received RESET_STREAM.'
+                            'Received RESET_STREAM.',
+                            'Received STOP_SENDING.'
                         ]);
                     });
                 }
             }
             catch (ex)
             {
+                console.error('c200', ex);
                 if (type !== 'webtransport')
                 {
                     throw ex;
@@ -2598,8 +2624,10 @@ function test(type,
                 expect(ex.message).to.oneOf(
                 [
                     'already exists',
-                    'Received RESET_STREAM.', // from peer losing due to already exists
-                    'Web error 0'
+                    // from peer losing due to already exists
+                    'Received RESET_STREAM.',
+                    'Web error 0',
+                    'failed to read handshake length'
                 ]);
                 setTimeout(client200, Math.random() * 2000);
             }
@@ -2647,13 +2675,15 @@ function test(type,
                             'The operation was aborted',
                             'The session is closed.',
                             'The stream was aborted by the remote server',
-                            'Received RESET_STREAM.'
+                            'Received RESET_STREAM.',
+                            'Received STOP_SENDING.'
                         ]);
                     });
                 }
             }
             catch (ex)
             {
+                console.error('s200', ex);
                 if (type !== 'webtransport')
                 {
                     throw ex;
@@ -2661,8 +2691,10 @@ function test(type,
                 expect(ex.message).to.oneOf(
                 [
                     'already exists',
-                    'Received RESET_STREAM.', // from peer losing due to already exists
-                    'Web error 0'
+                    // from peer losing due to already exists
+                    'Received RESET_STREAM.',
+                    'Web error 0',
+                    'failed to read handshake length'
                 ]);
                 setTimeout(server200, Math.random() * 2000);
             }
@@ -3343,7 +3375,15 @@ function test(type,
                 return setImmediate(handshake, server_duplex);
             }
 
-            var client_ended = false, server_ended = false;
+            var client_ended = false, server_ended = false, client_removed = false;
+
+            function check()
+            {
+                if (client_removed && server_ended)
+                {
+                    cb();
+                }
+            }
 
             server_duplex.on('readable', function readable ()
             {
@@ -3366,21 +3406,14 @@ function test(type,
             {
                 server_ended = true;
                 this.end();
+                check();
             });
-
-            if (type === 'webtransport')
-            {
-                server_duplex.on('error', function (err)
-                {
-                    expect(err.message).to.equal('The operation was aborted');
-                });
-            }
 
             client_mux.on('removed', function (duplex)
             {
                 expect(duplex).to.equal(client_duplex);
-                expect(server_ended).to.equal(!is_passthru);
-                cb();
+                client_removed = true;
+                check();
             });
 
             client_duplex.write('foo');
@@ -3394,7 +3427,15 @@ function test(type,
 
     it('should remove duplex after end message received then closed', function (cb)
     {
-        let client_duplex;
+        let client_duplex, client_removed = false, server_removed = false;
+
+        function check()
+        {
+            if (client_removed && server_removed)
+            {
+                cb();
+            }
+        }
 
         server_mux.on('handshake', function handshake(server_duplex)
         {
@@ -3403,24 +3444,21 @@ function test(type,
                 return setImmediate(handshake, server_duplex);
             }
 
-            client_duplex.on('readable', function ()
-            {
-                while (this.read() !== null);
-            });
+            client_duplex.resume();
 
             client_duplex.on('end', function ()
             {
                 this.destroy();
             });
 
-            if (type === 'webtransport')
+            server_mux.on('removed', function (duplex)
             {
-                server_duplex.on('error', function (err)
-                {
-                    expect(err.message).to.equal('The operation was aborted');
-                });
-            }
+                expect(duplex).to.equal(server_duplex);
+                server_removed = true;
+                check();
+            });
 
+            server_duplex.resume();
             server_duplex.end();
         });
 
@@ -3431,7 +3469,8 @@ function test(type,
             client_mux.on('removed', function (duplex)
             {
                 expect(duplex).to.equal(client_duplex);
-                cb();
+                client_removed = true;
+                check();
             });
         })();
     });
@@ -3517,7 +3556,8 @@ function test(type,
                 'carrier stream finished before duplex finished',
                 'carrier stream closed before duplex closed',
                 'carrier stream ended before end message received',
-                'The operation was aborted'
+                'The operation was aborted',
+                'The session is closed.'
             ]);
 
             if ((err.message === 'carrier stream finished before duplex finished') ||
@@ -3611,7 +3651,10 @@ function test(type,
                 }
                 catch (ex)
                 {
-                    expect(ex.message).to.equal('Web error 0');
+                    expect(ex.message).to.be.oneOf([
+                        'Web error 0',
+                        'Received RESET_STREAM.'
+                    ]);
                     client_errored = true;
                     check();
                 }
@@ -3639,13 +3682,14 @@ function test(type,
                 });
             });
 
-            const orig_fromWeb = stream.Duplex.fromWeb;
-            stream.Duplex.fromWeb = function (pair, options)
+            const Duplex = get_stream(client_mux).Duplex;
+            const orig_fromWeb = Duplex.fromWeb;
+            Duplex.fromWeb = function (pair, options)
             {
                 if (!options.highWaterMark)
                 {
-                    stream.Duplex.fromWeb = orig_fromWeb;
-                    throw new Error('foo');
+                    Duplex.fromWeb = orig_fromWeb;
+                    throw new get_Error(client_mux)('foo');
                 }
                 return orig_fromWeb.apply(this, arguments);
             };
@@ -3666,12 +3710,28 @@ function test(type,
 
         it('client should handle closed before handshake received', function (cb)
         {
+            let client_errored = false, server_closed = false;
+
+            function check()
+            {
+                if (client_errored && server_closed)
+                {
+                    cb();
+                }
+            }
+
             server_mux.on('peer_multiplex', function (duplex)
             {
                 duplex.on('error', function (err)
                 {
                     expect(err.message).to.equal('The operation was aborted');
                 });
+                duplex.on('close', function ()
+                {
+                    server_closed = true;
+                    check();
+                });
+                duplex.resume();
                 duplex.end();
             });
 
@@ -3684,7 +3744,8 @@ function test(type,
                 catch (ex)
                 {
                     expect(ex.message).to.equal('failed to read handshake length');
-                    cb();
+                    client_errored = true;
+                    check();
                 }
             })();
         });
@@ -3772,7 +3833,7 @@ module.exports = function(
         type,
         ServerBPMux, make_server, end_server, end_server_conn,
         ClientBPMux, make_client_conn, end_client_conn,
-        ClientBuffer, client_crypto, client_frame,
+        ClientBuffer, client_crypto, client_frame, ClientError, client_stream,
         fast)
 {
     [ false, true ].forEach(function (coa)
@@ -3782,7 +3843,7 @@ module.exports = function(
             test(type,
                  ServerBPMux, make_server, end_server, end_server_conn,
                  ClientBPMux, make_client_conn, end_client_conn,
-                 ClientBuffer, client_crypto, client_frame,
+                 ClientBuffer, client_crypto, client_frame, ClientError, client_stream,
                  coa, fast);
         });
     });

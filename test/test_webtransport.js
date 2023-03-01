@@ -80,4 +80,6 @@ require('./test_comms')(
     Buffer,
     require('crypto'),
     require('frame-stream'),
+    Error,
+    require('stream'),
     process.env.FAST);

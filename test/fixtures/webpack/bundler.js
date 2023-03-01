@@ -5,3 +5,4 @@ BPMux = require('../../..').BPMux;
 BundledBuffer = require('buffer').Buffer;
 bundled_crypto = require('crypto');
 bundled_frame = require('frame-stream');
+bundled_stream = require('stream');

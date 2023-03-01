@@ -24,17 +24,17 @@ console.trace = function trace() // eslint-disable-line no-console
     Error.captureStackTrace(err, trace);
     this.error(err.stack);
 };
-/*
+
 process.on('uncaughtException', err =>
 {
-    console.log("UE", err);
+    console.error("Uncaught exception", err);
 });
 
 process.on('unhandledRejection', err =>
 {
-    console.log("UR", err);
+    console.error("Unhandled rejection", err);
 });
-*/
+
 // Enable passing options in title (WithOptions in test/test_comms.js)
 require('mocha/lib/utils').isString = function (obj)
 {
@@ -60,6 +60,8 @@ module.exports = function (BrowserPrimus, // will be using browser transport
                            BrowserBuffer,
                            browser_crypto,
                            browser_frame,
+                           BrowserError,
+                           browser_stream,
                            BrowserWebTransport,
                            cb)
 {
@@ -120,6 +122,8 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         BrowserBuffer,
         browser_crypto,
         browser_frame,
+        BrowserError,
+        browser_stream,
         true);
 
     require('test_comms')(
@@ -197,6 +201,8 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         BrowserBuffer,
         browser_crypto,
         browser_frame,
+        BrowserError,
+        browser_stream,
         true);
 
     require('test_comms')(
@@ -239,7 +245,14 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         {
             (async () =>
             {
-                await wt.closed;
+                try
+                {
+                    await wt.closed;
+                }
+                catch (ex)
+                {
+                    return cb(ex);
+                }
                 cb();
             })();
         },
@@ -320,6 +333,8 @@ module.exports = function (BrowserPrimus, // will be using browser transport
         BrowserBuffer,
         browser_crypto,
         browser_frame,
+        BrowserError,
+        browser_stream,
         true);
 
     mocha.run(function (failures)
